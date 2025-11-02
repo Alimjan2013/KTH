@@ -140,7 +140,7 @@ class ConversationProvider {
 	}
 
 	async _handleMessage(text) {
-		// Check if user is asking for directory tree
+		// Check if user is asking for directory tree (direct command)
 		const lowerText = text.toLowerCase();
 		if (lowerText.includes('show') && (lowerText.includes('directory') || lowerText.includes('tree') || lowerText.includes('file'))) {
 			this._sendDirectoryTree(this._view.webview);
@@ -176,51 +176,9 @@ class ConversationProvider {
 		}
 
 		try {
-			// Prepare messages with system prompt
-			const messages = [
-				{
-					role: 'system',
-					content: 'You are a helpful coding assistant in VS Code. You help developers learn and solve coding problems. Be concise, clear, and helpful.'
-				},
-				...this.conversationHistory
-			];
-
-			// Call OpenAI API
-			const response = await this.openai.chat.completions.create({
-				model: 'gpt-4o',
-				messages: messages,
-				temperature: 0.7,
-				max_tokens: 1000
-			});
-
-			const assistantMessage = response.choices[0].message.content;
-
-			// Add assistant response to history
-			this.conversationHistory.push({
-				role: 'assistant',
-				content: assistantMessage
-			});
-
-			// Keep conversation history manageable (last 18 messages to keep total under 20 with system)
-			if (this.conversationHistory.length > 18) {
-				this.conversationHistory = this.conversationHistory.slice(-18);
-			}
-
-			// Send response to webview
-			if (this._view) {
-				this._view.webview.postMessage({
-					command: 'setTyping',
-					typing: false
-				});
-				
-				this._view.webview.postMessage({
-					command: 'receiveMessage',
-					text: assistantMessage,
-					isBot: true
-				});
-			}
+			await this._processWithTools();
 		} catch (error) {
-			console.error('Error calling OpenAI API:', error);
+			console.error('Error in _handleMessage:', error);
 			
 			let errorMessage = 'Sorry, I encountered an error while processing your request. ';
 			if (error.response) {
@@ -248,6 +206,189 @@ class ConversationProvider {
 			if (this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].role === 'user') {
 				this.conversationHistory.pop();
 			}
+		}
+	}
+
+	_getAvailableTools() {
+		return [
+			{
+				type: 'function',
+				function: {
+					name: 'get_directory_tree',
+					description: 'Get the directory tree structure of the current workspace. Use this when you need to understand the project structure, file organization, or analyze the codebase layout. The tool will return a formatted tree view showing all files and directories.',
+					parameters: {
+						type: 'object',
+						properties: {
+							reason: {
+								type: 'string',
+								description: 'Brief reason why you need to see the directory tree (e.g., "analyzing project structure", "finding configuration files", "understanding codebase organization")'
+							}
+						},
+						required: ['reason']
+					}
+				}
+			}
+		];
+	}
+
+	async _executeTool(functionName, arguments_) {
+		switch (functionName) {
+			case 'get_directory_tree':
+				try {
+					const treeText = await this._getDirectoryTreeAsText();
+					return {
+						success: true,
+						result: treeText
+					};
+				} catch (error) {
+					return {
+						success: false,
+						error: `Error reading directory tree: ${error.message}`
+					};
+				}
+			default:
+				return {
+					success: false,
+					error: `Unknown function: ${functionName}`
+				};
+		}
+	}
+
+	async _getDirectoryTreeAsText() {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			return "No workspace folder is currently open.";
+		}
+
+		try {
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const gitignorePatterns = this._readGitignore(workspacePath);
+			const tree = await this._readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns);
+			const formattedTree = this._formatTree(tree, workspacePath);
+			return formattedTree;
+		} catch (error) {
+			throw new Error(`Failed to read directory tree: ${error.message}`);
+		}
+	}
+
+	async _processWithTools() {
+		const maxIterations = 5; // Prevent infinite loops
+		let iteration = 0;
+
+		while (iteration < maxIterations) {
+			iteration++;
+
+			// Prepare messages with system prompt
+			const messages = [
+				{
+					role: 'system',
+					content: 'You are a helpful coding assistant in VS Code. You help developers learn and solve coding problems. You have access to tools that let you analyze the codebase structure. Use tools when needed to understand the project better. Be concise, clear, and helpful.'
+				},
+				...this.conversationHistory
+			];
+
+			// Call OpenAI API with tools
+			const response = await this.openai.chat.completions.create({
+				model: 'gpt-4o',
+				messages: messages,
+				tools: this._getAvailableTools(),
+				tool_choice: 'auto',
+				temperature: 0.7,
+				max_tokens: 2000
+			});
+
+			const assistantMessage = response.choices[0].message;
+
+			// Check if the model wants to call a function
+			if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+				// Add assistant message with tool calls to history
+				this.conversationHistory.push({
+					role: 'assistant',
+					content: assistantMessage.content,
+					tool_calls: assistantMessage.tool_calls
+				});
+
+				// Execute all tool calls
+				const toolResults = [];
+				for (const toolCall of assistantMessage.tool_calls) {
+					const functionName = toolCall.function.name;
+					let functionArgs;
+					try {
+						functionArgs = JSON.parse(toolCall.function.arguments);
+					} catch (error) {
+						console.error('Error parsing function arguments:', error);
+						functionArgs = {};
+					}
+
+					console.log(`Executing tool: ${functionName} with args:`, functionArgs);
+
+					// Execute the tool
+					const toolResult = await this._executeTool(functionName, functionArgs);
+					
+					// Add tool result to conversation
+					toolResults.push({
+						tool_call_id: toolCall.id,
+						role: 'tool',
+						name: functionName,
+						content: toolResult.success 
+							? toolResult.result 
+							: `Error: ${toolResult.error}`
+					});
+				}
+
+				// Add tool results to conversation history
+				this.conversationHistory.push(...toolResults);
+
+				// Continue the loop to get the final response from the model
+				continue;
+			}
+
+			// Model provided a regular response (no tool calls)
+			const finalResponse = assistantMessage.content || 'I apologize, but I couldn\'t generate a response.';
+
+			// Add assistant response to history
+			this.conversationHistory.push({
+				role: 'assistant',
+				content: finalResponse
+			});
+
+			// Keep conversation history manageable (last 30 messages to account for tool calls)
+			if (this.conversationHistory.length > 30) {
+				// Keep system message logic and recent messages
+				this.conversationHistory = this.conversationHistory.slice(-30);
+			}
+
+			// Send response to webview
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'setTyping',
+					typing: false
+				});
+				
+				this._view.webview.postMessage({
+					command: 'receiveMessage',
+					text: finalResponse,
+					isBot: true
+				});
+			}
+
+			// Exit the loop - we got a final response
+			return;
+		}
+
+		// If we've iterated too many times, send an error
+		if (this._view) {
+			this._view.webview.postMessage({
+				command: 'setTyping',
+				typing: false
+			});
+			
+			this._view.webview.postMessage({
+				command: 'receiveMessage',
+				text: 'I apologize, but I encountered an issue processing your request. Please try again.',
+				isBot: true
+			});
 		}
 	}
 
