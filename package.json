@@ -9,13 +9,33 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:kth-conversational-view"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [{
       "command": "KTH.helloWorld",
       "title": "Hello World"
-    }]
+    }],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kth-conversation",
+          "title": "Teach Me",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "kth-conversation": [
+        {
+          "type": "webview",
+          "id": "kth-conversational-view",
+          "name": "Conversation"
+        }
+      ]
+    }
   },
   "scripts": {
     "lint": "eslint .",
