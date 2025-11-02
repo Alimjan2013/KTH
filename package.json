@@ -42,6 +42,9 @@
     "pretest": "pnpm run lint",
     "test": "vscode-test"
   },
+  "dependencies": {
+    "openai": "6.7.0"
+  },
   "devDependencies": {
     "@types/vscode": "^1.105.0",
     "@types/mocha": "^10.0.10",

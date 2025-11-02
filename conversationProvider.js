@@ -5,6 +5,87 @@ const fs = require('fs');
 class ConversationProvider {
 	constructor(context) {
 		this.context = context;
+		this.conversationHistory = [];
+		this.openaiApiKey = null;
+		this.openai = null;
+		this._initializeOpenAI();
+	}
+
+	_initializeOpenAI() {
+		try {
+			// Try to load OpenAI dynamically
+			const OpenAI = require('openai');
+			
+			// Read API key from .env file in workspace root
+			this.openaiApiKey = this._readApiKeyFromEnv();
+			
+			if (!this.openaiApiKey) {
+				console.warn('OpenAI API key not found. Please set OPENAI_API_KEY in .env file in your workspace root.');
+				return;
+			}
+			
+			// Initialize OpenAI with API key from .env
+			this.openai = new OpenAI({
+				apiKey: this.openaiApiKey
+			});
+			
+			console.log('OpenAI initialized successfully with API key from .env file');
+		} catch (error) {
+			console.error('Error initializing OpenAI:', error.message);
+			if (error.code === 'MODULE_NOT_FOUND') {
+				console.warn('OpenAI package may not be installed. Run: pnpm install');
+			}
+		}
+	}
+
+	_readApiKeyFromEnv() {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				console.log('No workspace folder open');
+				return null;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const envPath = path.join(workspacePath, '.env');
+			
+			if (!fs.existsSync(envPath)) {
+				console.log('.env file not found in workspace root');
+				return null;
+			}
+
+			const envContent = fs.readFileSync(envPath, 'utf8');
+			const lines = envContent.split('\n');
+			
+			for (const line of lines) {
+				const trimmed = line.trim();
+				
+				// Skip empty lines and comments
+				if (trimmed === '' || trimmed.startsWith('#')) {
+					continue;
+				}
+				
+				// Look for OPENAI_API_KEY
+				if (trimmed.startsWith('OPENAI_API_KEY=')) {
+					let apiKey = trimmed.substring('OPENAI_API_KEY='.length).trim();
+					
+					// Remove quotes if present (handles OPENAI_API_KEY="key" or OPENAI_API_KEY='key')
+					apiKey = apiKey.replace(/^["']|["']$/g, '');
+					
+					if (apiKey && apiKey !== 'YOUR_API_KEY_HERE') {
+						console.log('Found OpenAI API key in .env file');
+						return apiKey;
+					}
+				}
+			}
+			
+			console.log('OPENAI_API_KEY not found in .env file');
+			return null;
+		} catch (error) {
+			console.error('Error reading .env file:', error.message);
+			return null;
+		}
 	}
 
 	resolveWebviewView(webviewView, _context, _token) {
@@ -46,15 +127,19 @@ class ConversationProvider {
 	_loadInitialMockData(webview) {
 		// Initial welcome message
 		setTimeout(() => {
+			const welcomeMessage = this.openai 
+				? "Hello! I'm powered by GPT-4o and ready to help you learn. Try asking me to 'show directory tree' or ask me any questions!"
+				: "Hello! I'm here to help you learn. To enable AI features, please add OPENAI_API_KEY to your .env file in the workspace root.";
+			
 			webview.postMessage({
 				command: 'addMockMessage',
-				text: "Hello! I'm here to help you learn. Try asking me to 'show directory tree' or 'show files' to see your workspace structure!",
+				text: welcomeMessage,
 				isBot: true
 			});
 		}, 100);
 	}
 
-	_handleMessage(text) {
+	async _handleMessage(text) {
 		// Check if user is asking for directory tree
 		const lowerText = text.toLowerCase();
 		if (lowerText.includes('show') && (lowerText.includes('directory') || lowerText.includes('tree') || lowerText.includes('file'))) {
@@ -62,23 +147,107 @@ class ConversationProvider {
 			return;
 		}
 
-		// Simulate a bot response
-		const responses = [
-			"That's a great question! Let me help you with that.",
-			"I understand what you're asking. Here's what I think...",
-			"Interesting! Let me break that down for you.",
-			"Sure thing! Here's my take on that.",
-			"Good point! Let me explain how that works."
-		];
-		const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-		
-		// Send response back to webview
+		// Add user message to history
+		this.conversationHistory.push({
+			role: 'user',
+			content: text
+		});
+
+		// If OpenAI is not available, send fallback message
+		if (!this.openai || !this.openaiApiKey) {
+			const fallbackMessage = "OpenAI API is not configured. Please add OPENAI_API_KEY to your .env file in the workspace root and reload the extension.";
+			
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'receiveMessage',
+					text: fallbackMessage,
+					isBot: true
+				});
+			}
+			return;
+		}
+
+		// Show typing indicator
 		if (this._view) {
 			this._view.webview.postMessage({
-				command: 'receiveMessage',
-				text: randomResponse,
-				isBot: true
+				command: 'setTyping',
+				typing: true
 			});
+		}
+
+		try {
+			// Prepare messages with system prompt
+			const messages = [
+				{
+					role: 'system',
+					content: 'You are a helpful coding assistant in VS Code. You help developers learn and solve coding problems. Be concise, clear, and helpful.'
+				},
+				...this.conversationHistory
+			];
+
+			// Call OpenAI API
+			const response = await this.openai.chat.completions.create({
+				model: 'gpt-4o',
+				messages: messages,
+				temperature: 0.7,
+				max_tokens: 1000
+			});
+
+			const assistantMessage = response.choices[0].message.content;
+
+			// Add assistant response to history
+			this.conversationHistory.push({
+				role: 'assistant',
+				content: assistantMessage
+			});
+
+			// Keep conversation history manageable (last 18 messages to keep total under 20 with system)
+			if (this.conversationHistory.length > 18) {
+				this.conversationHistory = this.conversationHistory.slice(-18);
+			}
+
+			// Send response to webview
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'setTyping',
+					typing: false
+				});
+				
+				this._view.webview.postMessage({
+					command: 'receiveMessage',
+					text: assistantMessage,
+					isBot: true
+				});
+			}
+		} catch (error) {
+			console.error('Error calling OpenAI API:', error);
+			
+			let errorMessage = 'Sorry, I encountered an error while processing your request. ';
+			if (error.response) {
+				errorMessage += `API Error: ${error.response.status} - ${error.response.statusText}`;
+			} else if (error.message) {
+				errorMessage += error.message;
+			} else {
+				errorMessage += 'Please check your API key and try again.';
+			}
+
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'setTyping',
+					typing: false
+				});
+				
+				this._view.webview.postMessage({
+					command: 'receiveMessage',
+					text: errorMessage,
+					isBot: true
+				});
+			}
+
+			// Remove the user message from history if there was an error
+			if (this.conversationHistory.length > 0 && this.conversationHistory[this.conversationHistory.length - 1].role === 'user') {
+				this.conversationHistory.pop();
+			}
 		}
 	}
 
@@ -421,6 +590,40 @@ class ConversationProvider {
 			padding: 12px;
 		}
 
+		.typing-indicator {
+			display: flex;
+			gap: 4px;
+			padding: 10px 14px;
+			align-items: center;
+		}
+
+		.typing-indicator .dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background-color: var(--vscode-descriptionForeground);
+			animation: typing 1.4s infinite;
+		}
+
+		.typing-indicator .dot:nth-child(2) {
+			animation-delay: 0.2s;
+		}
+
+		.typing-indicator .dot:nth-child(3) {
+			animation-delay: 0.4s;
+		}
+
+		@keyframes typing {
+			0%, 60%, 100% {
+				opacity: 0.3;
+				transform: translateY(0);
+			}
+			30% {
+				opacity: 1;
+				transform: translateY(-4px);
+			}
+		}
+
 		.message-time {
 			font-size: 11px;
 			opacity: 0.7;
@@ -521,8 +724,44 @@ class ConversationProvider {
 
 		// Track if welcome message should be removed
 		let welcomeShown = true;
+		let typingIndicator = null;
+
+		function showTypingIndicator() {
+			if (typingIndicator) {
+				return; // Already showing
+			}
+
+			if (welcomeShown && welcomeMessage) {
+				welcomeMessage.remove();
+				welcomeShown = false;
+			}
+
+			const messageDiv = document.createElement('div');
+			messageDiv.className = 'message bot';
+			messageDiv.id = 'typing-indicator-container';
+
+			const indicator = document.createElement('div');
+			indicator.className = 'message-bubble typing-indicator';
+			indicator.innerHTML = '<span class="dot"></span><span class="dot"></span><span class="dot"></span>';
+			
+			messageDiv.appendChild(indicator);
+			conversationContainer.appendChild(messageDiv);
+			conversationContainer.scrollTop = conversationContainer.scrollHeight;
+			
+			typingIndicator = messageDiv;
+		}
+
+		function hideTypingIndicator() {
+			if (typingIndicator) {
+				typingIndicator.remove();
+				typingIndicator = null;
+			}
+		}
 
 		function addMessage(text, isBot = false, isTree = false) {
+			// Hide typing indicator if shown
+			hideTypingIndicator();
+
 			if (welcomeShown && welcomeMessage) {
 				welcomeMessage.remove();
 				welcomeShown = false;
@@ -592,6 +831,13 @@ class ConversationProvider {
 					break;
 				case 'addMockMessage':
 					addMessage(message.text, message.isBot, false);
+					break;
+				case 'setTyping':
+					if (message.typing) {
+						showTypingIndicator();
+					} else {
+						hideTypingIndicator();
+					}
 					break;
 			}
 		});
