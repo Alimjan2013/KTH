@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
 
 class ConversationProvider {
 	constructor(context) {
@@ -32,6 +33,9 @@ class ConversationProvider {
 					case 'sendMessage':
 						this._handleMessage(message.text);
 						return;
+					case 'requestDirectoryTree':
+						this._sendDirectoryTree(webviewView.webview);
+						return;
 				}
 			},
 			null,
@@ -40,27 +44,24 @@ class ConversationProvider {
 	}
 
 	_loadInitialMockData(webview) {
-		// Mock conversation data to display initially
-		const mockMessages = [
-			{ text: "Hello! I'm here to help you learn. What would you like to know?", isBot: true },
-			{ text: "How does this extension work?", isBot: false },
-			{ text: "This extension provides an interactive learning experience. You can ask questions and get helpful responses to enhance your understanding!", isBot: true },
-			{ text: "That sounds great! Can you explain more about webviews?", isBot: false },
-			{ text: "Webviews in VS Code are powerful UI components that allow extensions to display custom HTML content. They're perfect for creating rich, interactive interfaces like this chat!", isBot: true }
-		];
-
-		mockMessages.forEach((msg, index) => {
-			setTimeout(() => {
-				webview.postMessage({
-					command: 'addMockMessage',
-					text: msg.text,
-					isBot: msg.isBot
-				});
-			}, index * 300); // Stagger the messages for effect
-		});
+		// Initial welcome message
+		setTimeout(() => {
+			webview.postMessage({
+				command: 'addMockMessage',
+				text: "Hello! I'm here to help you learn. Try asking me to 'show directory tree' or 'show files' to see your workspace structure!",
+				isBot: true
+			});
+		}, 100);
 	}
 
 	_handleMessage(text) {
+		// Check if user is asking for directory tree
+		const lowerText = text.toLowerCase();
+		if (lowerText.includes('show') && (lowerText.includes('directory') || lowerText.includes('tree') || lowerText.includes('file'))) {
+			this._sendDirectoryTree(this._view.webview);
+			return;
+		}
+
 		// Simulate a bot response
 		const responses = [
 			"That's a great question! Let me help you with that.",
@@ -79,6 +80,261 @@ class ConversationProvider {
 				isBot: true
 			});
 		}
+	}
+
+	async _sendDirectoryTree(webview) {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			webview.postMessage({
+				command: 'receiveMessage',
+				text: "No workspace folder is currently open. Please open a folder first.",
+				isBot: true,
+				isTree: false
+			});
+			return;
+		}
+
+		try {
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			// Read and parse .gitignore
+			const gitignorePatterns = this._readGitignore(workspacePath);
+			const tree = await this._readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns);
+			const formattedTree = this._formatTree(tree, workspacePath);
+			
+			webview.postMessage({
+				command: 'receiveMessage',
+				text: formattedTree,
+				isBot: true,
+				isTree: true
+			});
+		} catch (error) {
+			console.error('Error reading directory tree:', error);
+			webview.postMessage({
+				command: 'receiveMessage',
+				text: `Error reading directory tree: ${error.message}`,
+				isBot: true,
+				isTree: false
+			});
+		}
+	}
+
+	_readGitignore(workspacePath) {
+		const gitignorePath = path.join(workspacePath, '.gitignore');
+		const patterns = [];
+		
+		try {
+			if (fs.existsSync(gitignorePath)) {
+				const content = fs.readFileSync(gitignorePath, 'utf8');
+				const lines = content.split('\n');
+				
+				for (const line of lines) {
+					const trimmed = line.trim();
+					// Skip empty lines and comments
+					if (trimmed === '' || trimmed.startsWith('#')) {
+						continue;
+					}
+					patterns.push(trimmed);
+				}
+			}
+		} catch (error) {
+			console.log('Could not read .gitignore:', error.message);
+		}
+		
+		return patterns;
+	}
+
+	_shouldIgnore(filePath, relativePath, gitignorePatterns) {
+		if (!gitignorePatterns || gitignorePatterns.length === 0) {
+			return false;
+		}
+
+		// Normalize path separators
+		const normalizedPath = relativePath.replace(/\\/g, '/');
+		const pathSegments = normalizedPath.split('/');
+		
+		for (const pattern of gitignorePatterns) {
+			if (this._matchesPattern(normalizedPath, pathSegments, pattern)) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+
+	_matchesPattern(filePath, pathSegments, pattern) {
+		// Handle negation (starting with !) - skip for now
+		if (pattern.startsWith('!')) {
+			return false;
+		}
+		
+		// Handle directory patterns (ending with /)
+		const isDirectoryPattern = pattern.endsWith('/');
+		const cleanPattern = isDirectoryPattern ? pattern.slice(0, -1) : pattern;
+		
+		// Handle root-anchored patterns (starting with /)
+		const isRootAnchored = cleanPattern.startsWith('/');
+		const normalizedPattern = isRootAnchored ? cleanPattern.slice(1) : cleanPattern;
+		
+		// Escape special regex characters and convert gitignore patterns
+		let regexPattern = normalizedPattern
+			.replace(/\./g, '\\.')           // Escape dots
+			.replace(/\*\*/g, '___DOUBLE_STAR___')  // Temporarily replace **
+			.replace(/\*/g, '[^/]*')         // * matches anything except /
+			.replace(/___DOUBLE_STAR___/g, '.*')    // ** matches anything including /
+			.replace(/\?/g, '[^/]');         // ? matches single char except /
+		
+		// If pattern has **, it can match across directories
+		if (normalizedPattern.includes('**')) {
+			const regex = new RegExp(regexPattern);
+			return regex.test(filePath);
+		}
+		
+		// Check if any path segment matches
+		for (const segment of pathSegments) {
+			const regex = new RegExp(`^${regexPattern}$`);
+			if (regex.test(segment)) {
+				return true;
+			}
+		}
+		
+		// Check if the pattern matches as part of the path
+		if (isRootAnchored) {
+			// Pattern anchored to root - check from beginning
+			const regex = new RegExp(`^${regexPattern}`);
+			return regex.test(filePath);
+		} else {
+			// Pattern can match anywhere
+			const regex = new RegExp(regexPattern);
+			// Check each segment
+			for (const segment of pathSegments) {
+				if (regex.test(segment)) {
+					return true;
+				}
+			}
+			// Check full path
+			if (regex.test(filePath)) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+
+	async _readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePatterns = []) {
+		// Limit depth to prevent too much recursion
+		if (depth > 5) {
+			return tree;
+		}
+
+		// Skip common directories that shouldn't be shown
+		const skipDirs = ['node_modules', '.git', '.vscode', 'dist', 'build', '.next', 'out'];
+		const dirName = path.basename(dirPath);
+		if (skipDirs.includes(dirName) && depth > 0) {
+			return tree;
+		}
+
+		try {
+			const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+			
+			// Sort: directories first, then files
+			entries.sort((a, b) => {
+				if (a.isDirectory() === b.isDirectory()) {
+					return a.name.localeCompare(b.name);
+				}
+				return a.isDirectory() ? -1 : 1;
+			});
+
+			for (const entry of entries) {
+				const fullPath = path.join(dirPath, entry.name);
+				const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
+
+				// Check if this entry should be ignored
+				if (this._shouldIgnore(fullPath, relPath, gitignorePatterns)) {
+					continue;
+				}
+
+				if (entry.isDirectory()) {
+					tree.push({
+						name: entry.name,
+						path: relPath,
+						type: 'directory',
+						depth: depth
+					});
+					
+					// Recursively read subdirectories
+					await this._readDirectoryTree(fullPath, relPath, tree, depth + 1, gitignorePatterns);
+				} else {
+					tree.push({
+						name: entry.name,
+						path: relPath,
+						type: 'file',
+						depth: depth
+					});
+				}
+			}
+		} catch (error) {
+			// Skip directories we can't read (permissions, etc.)
+			console.log(`Skipping ${dirPath}: ${error.message}`);
+		}
+
+		return tree;
+	}
+
+	_formatTree(treeItems, rootPath) {
+		if (treeItems.length === 0) {
+			return "The workspace directory is empty.";
+		}
+
+		const rootName = path.basename(rootPath);
+		let formatted = `📁 **${rootName}**\n\`\`\`\n`;
+
+		// Build tree structure with proper tree characters
+		for (let i = 0; i < treeItems.length; i++) {
+			const item = treeItems[i];
+			const depth = item.depth;
+			
+			// Determine if this is the last sibling at this depth
+			let isLastSibling = true;
+			for (let j = i + 1; j < treeItems.length; j++) {
+				const nextItem = treeItems[j];
+				if (nextItem.depth < depth) {
+					break; // We've moved to a parent level
+				}
+				if (nextItem.depth === depth) {
+					isLastSibling = false;
+					break;
+				}
+			}
+			
+			// Build prefix for each level
+			let prefix = '';
+			for (let d = 1; d < depth; d++) {
+				// For each parent level, check if there are more siblings coming
+				let hasMoreAtLevel = false;
+				
+				// Look ahead to see if there are more items at this depth or below
+				for (let j = i + 1; j < treeItems.length; j++) {
+					const nextItem = treeItems[j];
+					if (nextItem.depth < d) {
+						break; // Moved to parent level
+					}
+					if (nextItem.depth === d) {
+						hasMoreAtLevel = true;
+						break;
+					}
+				}
+				
+				prefix += hasMoreAtLevel ? '│   ' : '    ';
+			}
+			
+			prefix += isLastSibling ? '└── ' : '├── ';
+			const icon = item.type === 'directory' ? '📁' : '📄';
+			formatted += `${prefix}${icon} ${item.name}\n`;
+		}
+
+		formatted += `\`\`\``;
+		return formatted;
 	}
 
 	_getHtmlForWebview(webview) {
@@ -156,6 +412,15 @@ class ConversationProvider {
 			border: 1px solid var(--vscode-input-border);
 		}
 
+		.message-bubble.tree-message {
+			font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+			font-size: 12px;
+			white-space: pre-wrap;
+			max-height: 400px;
+			overflow-y: auto;
+			padding: 12px;
+		}
+
 		.message-time {
 			font-size: 11px;
 			opacity: 0.7;
@@ -211,6 +476,22 @@ class ConversationProvider {
 			cursor: not-allowed;
 		}
 
+		#showTreeButton {
+			padding: 8px 12px;
+			background-color: var(--vscode-button-secondaryBackground);
+			color: var(--vscode-button-secondaryForeground);
+			border: none;
+			border-radius: 4px;
+			cursor: pointer;
+			font-family: inherit;
+			font-size: 12px;
+			margin-right: 4px;
+		}
+
+		#showTreeButton:hover {
+			background-color: var(--vscode-button-secondaryHoverBackground);
+		}
+
 		.welcome-message {
 			text-align: center;
 			padding: 40px 20px;
@@ -225,6 +506,7 @@ class ConversationProvider {
 		</div>
 	</div>
 	<div class="input-container">
+		<button id="showTreeButton" title="Show directory tree">📁 Tree</button>
 		<input type="text" id="messageInput" placeholder="Type your message..." />
 		<button id="sendButton">Send</button>
 	</div>
@@ -235,11 +517,12 @@ class ConversationProvider {
 		const welcomeMessage = document.getElementById('welcomeMessage');
 		const messageInput = document.getElementById('messageInput');
 		const sendButton = document.getElementById('sendButton');
+		const showTreeButton = document.getElementById('showTreeButton');
 
 		// Track if welcome message should be removed
 		let welcomeShown = true;
 
-		function addMessage(text, isBot = false) {
+		function addMessage(text, isBot = false, isTree = false) {
 			if (welcomeShown && welcomeMessage) {
 				welcomeMessage.remove();
 				welcomeShown = false;
@@ -249,8 +532,12 @@ class ConversationProvider {
 			messageDiv.className = \`message \${isBot ? 'bot' : 'user'}\`;
 
 			const bubble = document.createElement('div');
-			bubble.className = 'message-bubble';
-			bubble.textContent = text;
+			bubble.className = \`message-bubble \${isTree ? 'tree-message' : ''}\`;
+			if (isTree) {
+				bubble.textContent = text;
+			} else {
+				bubble.textContent = text;
+			}
 			messageDiv.appendChild(bubble);
 
 			const time = document.createElement('div');
@@ -282,6 +569,12 @@ class ConversationProvider {
 			}, 500);
 		}
 
+		showTreeButton.addEventListener('click', () => {
+			vscode.postMessage({
+				command: 'requestDirectoryTree'
+			});
+		});
+
 		sendButton.addEventListener('click', sendMessage);
 		messageInput.addEventListener('keypress', (e) => {
 			if (e.key === 'Enter') {
@@ -294,11 +587,11 @@ class ConversationProvider {
 			const message = event.data;
 			switch (message.command) {
 				case 'receiveMessage':
-					addMessage(message.text, message.isBot);
+					addMessage(message.text, message.isBot, message.isTree || false);
 					sendButton.disabled = false;
 					break;
 				case 'addMockMessage':
-					addMessage(message.text, message.isBot);
+					addMessage(message.text, message.isBot, false);
 					break;
 			}
 		});
