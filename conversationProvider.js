@@ -650,10 +650,11 @@ class ConversationProvider {
 	_getHtmlForWebview(webview) {
 		return `<!DOCTYPE html>
 <html lang="en">
-<head>
+	<head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Conversation</title>
+	<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 	<style>
 		* {
 			margin: 0;
@@ -729,6 +730,132 @@ class ConversationProvider {
 			max-height: 400px;
 			overflow-y: auto;
 			padding: 12px;
+		}
+
+		/* Markdown styling */
+		.message-bubble.markdown-content {
+			line-height: 1.6;
+		}
+
+		.message-bubble.markdown-content p {
+			margin: 0.5em 0;
+		}
+
+		.message-bubble.markdown-content p:first-child {
+			margin-top: 0;
+		}
+
+		.message-bubble.markdown-content p:last-child {
+			margin-bottom: 0;
+		}
+
+		.message-bubble.markdown-content h1,
+		.message-bubble.markdown-content h2,
+		.message-bubble.markdown-content h3,
+		.message-bubble.markdown-content h4 {
+			margin: 0.8em 0 0.4em 0;
+			font-weight: 600;
+		}
+
+		.message-bubble.markdown-content h1 {
+			font-size: 1.3em;
+			border-bottom: 1px solid var(--vscode-input-border);
+			padding-bottom: 0.3em;
+		}
+
+		.message-bubble.markdown-content h2 {
+			font-size: 1.2em;
+		}
+
+		.message-bubble.markdown-content h3 {
+			font-size: 1.1em;
+		}
+
+		.message-bubble.markdown-content ul,
+		.message-bubble.markdown-content ol {
+			margin: 0.5em 0;
+			padding-left: 1.5em;
+		}
+
+		.message-bubble.markdown-content li {
+			margin: 0.2em 0;
+		}
+
+		.message-bubble.markdown-content code {
+			background-color: var(--vscode-textCodeBlock-background);
+			color: var(--vscode-textLink-foreground);
+			padding: 2px 6px;
+			border-radius: 3px;
+			font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+			font-size: 0.9em;
+		}
+
+		.message-bubble.markdown-content pre {
+			background-color: var(--vscode-textCodeBlock-background);
+			border: 1px solid var(--vscode-input-border);
+			border-radius: 4px;
+			padding: 12px;
+			overflow-x: auto;
+			margin: 0.8em 0;
+			font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+			font-size: 0.9em;
+			line-height: 1.4;
+		}
+
+		.message-bubble.markdown-content pre code {
+			background: none;
+			padding: 0;
+			border-radius: 0;
+			color: var(--vscode-editor-foreground);
+		}
+
+		.message-bubble.markdown-content blockquote {
+			border-left: 3px solid var(--vscode-textBlockQuote-border);
+			padding-left: 1em;
+			margin: 0.8em 0;
+			color: var(--vscode-descriptionForeground);
+			font-style: italic;
+		}
+
+		.message-bubble.markdown-content table {
+			border-collapse: collapse;
+			margin: 0.8em 0;
+			width: 100%;
+		}
+
+		.message-bubble.markdown-content table th,
+		.message-bubble.markdown-content table td {
+			border: 1px solid var(--vscode-input-border);
+			padding: 6px 12px;
+			text-align: left;
+		}
+
+		.message-bubble.markdown-content table th {
+			background-color: var(--vscode-textCodeBlock-background);
+			font-weight: 600;
+		}
+
+		.message-bubble.markdown-content a {
+			color: var(--vscode-textLink-foreground);
+			text-decoration: none;
+		}
+
+		.message-bubble.markdown-content a:hover {
+			text-decoration: underline;
+		}
+
+		.message-bubble.markdown-content strong {
+			font-weight: 600;
+		}
+
+		.message-bubble.markdown-content em {
+			font-style: italic;
+		}
+
+		.message-bubble.markdown-content hr {
+			border: none;
+			border-top: 1px solid var(--vscode-input-border);
+			margin: 1em 0;
 		}
 
 		.typing-indicator {
@@ -912,12 +1039,30 @@ class ConversationProvider {
 			messageDiv.className = \`message \${isBot ? 'bot' : 'user'}\`;
 
 			const bubble = document.createElement('div');
-			bubble.className = \`message-bubble \${isTree ? 'tree-message' : ''}\`;
+			
 			if (isTree) {
+				// Tree messages use monospace formatting
+				bubble.className = 'message-bubble tree-message';
 				bubble.textContent = text;
+			} else if (isBot && typeof marked !== 'undefined') {
+				// Bot messages with markdown support
+				bubble.className = 'message-bubble markdown-content';
+				try {
+					// Use marked.js to parse markdown
+					bubble.innerHTML = marked.parse(text, {
+						breaks: true,
+						gfm: true
+					});
+				} catch (error) {
+					console.error('Markdown parsing error:', error);
+					bubble.textContent = text;
+				}
 			} else {
+				// User messages or fallback - plain text
+				bubble.className = 'message-bubble';
 				bubble.textContent = text;
 			}
+			
 			messageDiv.appendChild(bubble);
 
 			const time = document.createElement('div');
