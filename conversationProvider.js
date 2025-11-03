@@ -3,8 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const dirTree = require('./services/dirTree');
 const { getReactHtml } = require('./ui/conversationHtml');
-const { streamText } = require('ai');
+const { streamText, generateText, tool } = require('ai');
 const { createGateway } = require('@ai-sdk/gateway');
+const { z } = require('zod');
 const dotenv = require('dotenv');
 
 class ConversationProvider {
@@ -14,6 +15,42 @@ class ConversationProvider {
 		this.openaiApiKey = null;
 		this.openai = null;
 		this._initializeOpenAI();
+	}
+
+	async _answerWithDirectoryTree(userText) {
+		const treeText = await this._getDirectoryTreeAsText();
+		const gateway = createGateway({ apiKey: this.openaiApiKey, baseUrl: this.gatewayBaseUrl || undefined });
+		const prompt = [
+			`USER QUESTION: ${userText}`,
+			'',
+			'PROJECT DIRECTORY TREE:',
+			treeText,
+			'',
+			'Please summarize the project structure (key folders/files, roles, and any notable patterns). Be concise and actionable.'
+		].join('\n');
+
+		let finalResponse = '';
+		try {
+			const result = await generateText({
+				model: gateway('openai/gpt-4o'),
+				prompt,
+				maxTokens: 800,
+				temperature: 0.5,
+			});
+			finalResponse = (result && typeof result.text === 'string') ? result.text : '';
+			if (!finalResponse || !finalResponse.trim()) {
+				finalResponse = 'I reviewed the directory tree but could not generate a summary. Please try again.';
+			}
+		} catch (err) {
+			console.error('answerWithDirectoryTree error:', err && err.message ? err.message : err);
+			finalResponse = 'There was an error summarizing the directory tree.';
+		}
+
+		this.conversationHistory.push({ role: 'assistant', content: finalResponse });
+		if (this._view) {
+			this._view.webview.postMessage({ command: 'setTyping', typing: false });
+			this._view.webview.postMessage({ command: 'receiveMessage', text: finalResponse, isBot: true });
+		}
 	}
 
 	_initializeOpenAI() {
@@ -185,6 +222,13 @@ class ConversationProvider {
 		}
 
 		try {
+			// Heuristic: if the user asks about structure, eagerly fetch tree and answer with it
+			const wantsStructure = /structure|project\s*tree|directory|folders|files|layout/i.test(text);
+			if (wantsStructure) {
+				await this._answerWithDirectoryTree(text);
+				return;
+			}
+
 			await this._processWithVercelAI();
 		} catch (error) {
 			console.error('Error in _handleMessage:', error);
@@ -297,25 +341,42 @@ class ConversationProvider {
 				...this.conversationHistory
 			];
 
-            // Call Vercel AI Gateway via streamText (simple prompt-based)
+            // Use AI SDK tool calling to let the model call get_directory_tree.
+            const gateway = createGateway({ apiKey: this.openaiApiKey, baseUrl: this.gatewayBaseUrl || undefined });
             const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
-            const gateway = createGateway({ apiKey: this.openaiApiKey });
-            const result = await streamText({
-                model: gateway('openai/gpt-4o'),
-                prompt
-            });
+            const tools = {
+                get_directory_tree: tool({
+                    description: 'Get the directory tree of the current workspace',
+                    inputSchema: z.object({
+                        reason: z.string().describe('Reason for needing the tree'),
+                    }),
+                    execute: async ({ reason }) => {
+                        const treeText = await this._getDirectoryTreeAsText();
+                        return { tree: treeText, reason };
+                    },
+                }),
+            };
 
             let finalResponse = '';
-            for await (const part of result.textStream) {
-                finalResponse += part;
+            try {
+                const result = await generateText({
+                    model: gateway('openai/gpt-4o'),
+                    prompt,
+                    tools,
+                    maxTokens: 1000,
+                    temperature: 0.7,
+                });
+                finalResponse = (result && typeof result.text === 'string') ? result.text : '';
+                if (!finalResponse || !finalResponse.trim()) {
+                    console.warn('AI SDK returned empty text. Full result:', JSON.stringify(result, null, 2));
+                    finalResponse = 'I could not produce an answer. Please try rephrasing your question.';
+                }
+            } catch (err) {
+                console.error('generateText error:', err && err.message ? err.message : err);
+                finalResponse = 'There was an error contacting the AI service. Please check your gateway configuration.';
             }
-            finalResponse = finalResponse || 'I apologize, but I couldn\'t generate a response.';
 
-			// Add assistant response to history
-			this.conversationHistory.push({
-				role: 'assistant',
-				content: finalResponse
-			});
+            this.conversationHistory.push({ role: 'assistant', content: finalResponse });
 
 			// Keep conversation history manageable (last 30 messages to account for tool calls)
 			if (this.conversationHistory.length > 30) {

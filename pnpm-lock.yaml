@@ -17,6 +17,9 @@ dependencies:
   openai:
     specifier: 6.7.0
     version: 6.7.0(zod@4.1.12)
+  zod:
+    specifier: ^4.1.12
+    version: 4.1.12
 
 devDependencies:
   '@types/mocha':
