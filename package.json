@@ -41,7 +41,7 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "pretest": "pnpm run lint",
+    "pretest": "npm run lint",
     "test": "vscode-test"
   },
   "dependencies": {
