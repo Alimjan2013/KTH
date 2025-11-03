@@ -14,10 +14,12 @@
   ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "KTH.helloWorld",
-      "title": "Hello World"
-    }],
+    "commands": [
+      {
+        "command": "KTH.helloWorld",
+        "title": "Hello World"
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
@@ -43,14 +45,17 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^2.0.5",
+    "ai": "^5.0.86",
+    "dotenv": "^17.2.3",
     "openai": "6.7.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.105.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "eslint": "^9.36.0",
+    "@types/vscode": "^1.105.0",
     "@vscode/test-cli": "^0.0.11",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.36.0"
   }
 }

@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const dirTree = require('./services/dirTree');
 const { getReactHtml } = require('./ui/conversationHtml');
+const { streamText } = require('ai');
+const { createGateway } = require('@ai-sdk/gateway');
+const dotenv = require('dotenv');
 
 class ConversationProvider {
 	constructor(context) {
@@ -15,28 +18,23 @@ class ConversationProvider {
 
 	_initializeOpenAI() {
 		try {
-			// Try to load OpenAI dynamically
-			const OpenAI = require('openai');
-			
-			// Read API key from .env file in workspace root
-			this.openaiApiKey = this._readApiKeyFromEnv();
-			
+			// Load env from workspace root
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				const workspacePath = workspaceFolders[0].uri.fsPath;
+				dotenv.config({ path: path.join(workspacePath, '.env') });
+			}
+
+			// Read gateway API key first, fallback to OPENAI_API_KEY
+			this.openaiApiKey = process.env.AI_GATEWAY_API_KEY || process.env.OPENAI_API_KEY || null;
 			if (!this.openaiApiKey) {
 				console.warn('OpenAI API key not found. Please set OPENAI_API_KEY in .env file in your workspace root.');
 				return;
 			}
-			
-			// Initialize OpenAI with API key from .env
-			this.openai = new OpenAI({
-				apiKey: this.openaiApiKey
-			});
-			
-			console.log('OpenAI initialized successfully with API key from .env file');
+
+			console.log('Vercel AI SDK will be used via streamText with env configuration');
 		} catch (error) {
 			console.error('Error initializing OpenAI:', error.message);
-			if (error.code === 'MODULE_NOT_FOUND') {
-				console.warn('OpenAI package may not be installed. Run: pnpm install');
-			}
 		}
 	}
 
@@ -164,8 +162,8 @@ class ConversationProvider {
 			content: text
 		});
 
-		// If OpenAI is not available, send fallback message
-		if (!this.openai || !this.openaiApiKey) {
+		// If API key is not available, send fallback message
+		if (!this.openaiApiKey) {
 			const fallbackMessage = "OpenAI API is not configured. Please add OPENAI_API_KEY to your .env file in the workspace root and reload the extension.";
 			
 			if (this._view) {
@@ -187,7 +185,7 @@ class ConversationProvider {
 		}
 
 		try {
-			await this._processWithTools();
+			await this._processWithVercelAI();
 		} catch (error) {
 			console.error('Error in _handleMessage:', error);
 			
@@ -283,7 +281,7 @@ class ConversationProvider {
 		}
 	}
 
-	async _processWithTools() {
+    async _processWithVercelAI() {
 		const maxIterations = 5; // Prevent infinite loops
 		let iteration = 0;
 
@@ -291,7 +289,7 @@ class ConversationProvider {
 			iteration++;
 
 			// Prepare messages with system prompt
-			const messages = [
+    const messages = [
 				{
 					role: 'system',
 					content: 'You are a helpful coding assistant in VS Code. You help developers learn and solve coding problems. You have access to tools that let you analyze the codebase structure. Use tools when needed to understand the project better. Be concise, clear, and helpful.'
@@ -299,64 +297,19 @@ class ConversationProvider {
 				...this.conversationHistory
 			];
 
-			// Call OpenAI API with tools
-			const response = await this.openai.chat.completions.create({
-				model: 'gpt-4o',
-				messages: messages,
-				tools: this._getAvailableTools(),
-				tool_choice: 'auto',
-				temperature: 0.7,
-				max_tokens: 2000
-			});
+            // Call Vercel AI Gateway via streamText (simple prompt-based)
+            const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+            const gateway = createGateway({ apiKey: this.openaiApiKey });
+            const result = await streamText({
+                model: gateway('openai/gpt-4o'),
+                prompt
+            });
 
-			const assistantMessage = response.choices[0].message;
-
-			// Check if the model wants to call a function
-			if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-				// Add assistant message with tool calls to history
-				this.conversationHistory.push({
-					role: 'assistant',
-					content: assistantMessage.content,
-					tool_calls: assistantMessage.tool_calls
-				});
-
-				// Execute all tool calls
-				const toolResults = [];
-				for (const toolCall of assistantMessage.tool_calls) {
-					const functionName = toolCall.function.name;
-					let functionArgs;
-					try {
-						functionArgs = JSON.parse(toolCall.function.arguments);
-					} catch (error) {
-						console.error('Error parsing function arguments:', error);
-						functionArgs = {};
-					}
-
-					console.log(`Executing tool: ${functionName} with args:`, functionArgs);
-
-					// Execute the tool
-					const toolResult = await this._executeTool(functionName, functionArgs);
-					
-					// Add tool result to conversation
-					toolResults.push({
-						tool_call_id: toolCall.id,
-						role: 'tool',
-						name: functionName,
-						content: toolResult.success 
-							? toolResult.result 
-							: `Error: ${toolResult.error}`
-					});
-				}
-
-				// Add tool results to conversation history
-				this.conversationHistory.push(...toolResults);
-
-				// Continue the loop to get the final response from the model
-				continue;
-			}
-
-			// Model provided a regular response (no tool calls)
-			const finalResponse = assistantMessage.content || 'I apologize, but I couldn\'t generate a response.';
+            let finalResponse = '';
+            for await (const part of result.textStream) {
+                finalResponse += part;
+            }
+            finalResponse = finalResponse || 'I apologize, but I couldn\'t generate a response.';
 
 			// Add assistant response to history
 			this.conversationHistory.push({
@@ -384,8 +337,8 @@ class ConversationProvider {
 				});
 			}
 
-			// Exit the loop - we got a final response
-			return;
+            // Exit the loop - we got a final response
+            return;
 		}
 
 		// If we've iterated too many times, send an error
