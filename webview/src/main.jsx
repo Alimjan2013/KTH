@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Streamdown } from 'streamdown';
 import './index.css';
 import { createRoot } from 'react-dom/client';
 
@@ -8,42 +9,14 @@ function App() {
 	const [input, setInput] = useState('');
 	const [typing, setTyping] = useState(false);
 	const containerRef = useRef(null);
-	const mdLibRef = useRef(null);
-
-	useEffect(() => {
-		// Lazy-load streamdown for markdown rendering
-		import('streamdown')
-			.then((mod) => {
-				mdLibRef.current = mod;
-			})
-			.catch(() => {
-				mdLibRef.current = null;
-			});
-	}, []);
-
-	function renderMarkdown(text) {
-		try {
-			const mod = mdLibRef.current;
-			if (mod) {
-				// Try common APIs
-				if (typeof mod.renderToHtml === 'function') {
-					return mod.renderToHtml(text);
-				}
-				if (typeof mod.default === 'function') {
-					return mod.default(text);
-				}
-				if (mod.Streamdown) {
-					const r = new mod.Streamdown();
-					if (typeof r.render === 'function') return r.render(text);
-				}
-			}
-			// Fallback to marked if present
-			if (window.marked) return window.marked.parse(text, { breaks: true, gfm: true });
-			return text;
-		} catch {
-			return text;
+	const mermaidConfig = {
+		theme: 'dark',
+		themeVariables: {
+		  primaryColor: '#ff0000',
+		  primaryTextColor: '#fff'
 		}
-	}
+	  };
+
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -93,9 +66,12 @@ function App() {
 				)}
 				{messages.map((m, i) => (
 					<div key={i} className={`max-w-[80%] ${m.isBot ? 'self-start' : 'self-end'}`}>
-						<div className={`${m.isTree ? '' : ''} rounded-xl px-3 py-2 ${m.isBot ? 'bg-[var(--vscode-input-background)] text-[var(--vscode-foreground)] border border-[var(--vscode-input-border)]' : 'bg-[var(--btn-bg)] text-[var(--btn-fg)]'} ${m.isTree ? 'whitespace-pre-wrap font-mono text-[12px] max-h-96 overflow-y-auto p-3' : ''}`}
-							dangerouslySetInnerHTML={m.isBot && !m.isTree ? { __html: renderMarkdown(m.text) } : undefined}>
-							{(m.isBot && !m.isTree) ? null : m.text}
+						<div className={`${m.isTree ? '' : ''} rounded-xl px-3 py-2 ${m.isBot ? 'bg-[var(--vscode-input-background)] text-[var(--vscode-foreground)] border border-[var(--vscode-input-border)]' : 'bg-[var(--btn-bg)] text-[var(--btn-fg)]'} ${m.isTree ? 'whitespace-pre-wrap font-mono text-[12px] max-h-96 overflow-y-auto p-3' : ''}`}>
+							{m.isBot && !m.isTree ? (
+								<Streamdown mermaidConfig={mermaidConfig}>{m.text}</Streamdown>
+							) : (
+								m.text
+							)}
 						</div>
 						<div className={`text-[11px] opacity-70 mt-1 px-1 ${m.isBot ? 'text-left' : 'text-right'}`}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
 					</div>
@@ -103,17 +79,17 @@ function App() {
 				{typing && (
 					<div className="self-start max-w-[80%]">
 						<div className="rounded-xl px-3 py-2 flex gap-1">
-							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-80" />
-							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-60" />
-							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-40" />
+							<span className="w-2 h-2 rounded-full bg-(--muted) opacity-80" />
+							<span className="w-2 h-2 rounded-full bg-(--muted) opacity-60" />
+							<span className="w-2 h-2 rounded-full bg-(--muted) opacity-40" />
 						</div>
 					</div>
 				)}
 			</div>
-			<div className="p-3 border-t border-[var(--panel-border)] flex gap-2">
-				<button id="showTreeButton" title="Show directory tree" onClick={requestTree} className="px-3 py-2 rounded bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] text-xs">📁 Tree</button>
-				<input id="messageInput" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter') send(); }} placeholder="Type your message..." className="flex-1 px-3 py-2 rounded border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]" />
-				<button id="sendButton" onClick={send} className="px-4 py-2 rounded bg-[var(--btn-bg)] text-[var(--btn-fg)]">Send</button>
+			<div className="p-3 border-t border-(--panel-border) flex gap-2">
+				<button id="showTreeButton" title="Show directory tree" onClick={requestTree} className="px-3 py-2 rounded bg-(--vscode-button-secondaryBackground) text-(--vscode-button-secondaryForeground) text-xs">📁 Tree</button>
+				<input id="messageInput" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter') send(); }} placeholder="Type your message..." className="flex-1 px-3 py-2 rounded border border-(--vscode-input-border) bg-(--vscode-input-background) text-(--vscode-input-foreground)" />
+				<button id="sendButton" onClick={send} className="px-4 py-2 rounded bg-(--btn-bg) text-(--btn-fg)">Send</button>
 			</div>
 		</div>
 	);
