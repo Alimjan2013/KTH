@@ -63,7 +63,7 @@ function shouldIgnore(filePath, relativePath, gitignorePatterns) {
 	return false;
 }
 
-async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePatterns = []) {
+async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePatterns = [], progressCallback = null) {
 	if (depth > 5) return tree;
 	const skipDirs = ['node_modules', '.git', '.vscode', 'dist', 'build', '.next', 'out'];
 	const dirName = path.basename(dirPath);
@@ -80,9 +80,17 @@ async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePa
 			if (shouldIgnore(fullPath, relPath, gitignorePatterns)) continue;
 			if (entry.isDirectory()) {
 				tree.push({ name: entry.name, path: relPath, type: 'directory', depth });
-				await readDirectoryTree(fullPath, relPath, tree, depth + 1, gitignorePatterns);
+				// Report progress for directories
+				if (progressCallback) {
+					progressCallback({ type: 'directory', path: relPath, total: tree.length });
+				}
+				await readDirectoryTree(fullPath, relPath, tree, depth + 1, gitignorePatterns, progressCallback);
 			} else {
 				tree.push({ name: entry.name, path: relPath, type: 'file', depth });
+				// Report progress for files (throttled to every 10 files to reduce overhead)
+				if (progressCallback && tree.length % 10 === 0) {
+					progressCallback({ type: 'file', path: relPath, total: tree.length });
+				}
 			}
 		}
 	} catch (error) {

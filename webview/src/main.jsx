@@ -6,7 +6,7 @@ import { InputBar } from './components/InputBar.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
-	const { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree } = useVSCodeMessaging();
+	const { messages, setMessages, typing, setTyping, progress, sendUserMessage, requestDirectoryTree } = useVSCodeMessaging();
 	const [input, setInput] = useState('');
 	
 
@@ -25,7 +25,7 @@ function App() {
 
 	return (
 		<div className="h-screen flex flex-col">
-			<MessageList messages={messages} typing={typing} />
+			<MessageList messages={messages} typing={typing} progress={progress} />
 			<InputBar input={input} setInput={setInput} onSend={send} onTree={requestTree} />
 		</div>
 	);
