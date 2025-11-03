@@ -239,6 +239,32 @@ class ConversationProvider {
 						required: ['reason']
 					}
 				}
+			},
+			{
+				type: 'function',
+				function: {
+					name: 'read_file_content',
+					description: 'Read the content of a file from the current workspace. Use this after viewing the directory tree when you need to inspect specific implementation details (e.g., auth flows). Provide a workspace-relative path like "src/auth/index.ts" or an absolute path within the workspace.',
+					parameters: {
+						type: 'object',
+						properties: {
+							file_path: {
+								type: 'string',
+								description: 'Workspace-relative or absolute file path to read.'
+							},
+							reason: {
+								type: 'string',
+								description: 'Brief reason why this file needs to be read (e.g., "inspect auth middleware").'
+							},
+							max_bytes: {
+								type: 'number',
+								description: 'Optional limit for returned content size. Defaults to 20000 bytes.',
+								minimum: 1000
+							}
+						},
+						required: ['file_path', 'reason']
+					}
+				}
 			}
 		];
 	}
@@ -257,6 +283,60 @@ class ConversationProvider {
 						success: false,
 						error: `Error reading directory tree: ${error.message}`
 					};
+				}
+			case 'read_file_content':
+				try {
+					const { file_path, max_bytes } = arguments_ || {};
+					if (!file_path || typeof file_path !== 'string') {
+						return { success: false, error: 'file_path is required and must be a string.' };
+					}
+
+					const workspaceFolders = vscode.workspace.workspaceFolders;
+					if (!workspaceFolders || workspaceFolders.length === 0) {
+						return { success: false, error: 'No workspace folder is currently open.' };
+					}
+
+					const workspacePath = workspaceFolders[0].uri.fsPath;
+					const resolvedPath = path.isAbsolute(file_path) ? file_path : path.join(workspacePath, file_path);
+					const normalizedResolved = path.normalize(resolvedPath);
+
+					// Ensure the resolved path is within the workspace root
+					if (!normalizedResolved.startsWith(path.normalize(workspacePath + path.sep))) {
+						return { success: false, error: 'Access denied: Path is outside of the workspace.' };
+					}
+
+					if (!fs.existsSync(normalizedResolved)) {
+						return { success: false, error: `File not found: ${file_path}` };
+					}
+
+					const stat = fs.statSync(normalizedResolved);
+					if (!stat.isFile()) {
+						return { success: false, error: 'Path is not a file.' };
+					}
+
+					const limit = typeof max_bytes === 'number' && max_bytes >= 1000 ? max_bytes : 20000;
+					let content = fs.readFileSync(normalizedResolved);
+
+					// Basic binary detection: presence of null byte
+					const isBinary = content.includes(0);
+					if (isBinary) {
+						return { success: false, error: 'Binary file detected; cannot display as text.' };
+					}
+
+					let text = content.toString('utf8');
+					let truncatedNote = '';
+					if (Buffer.byteLength(text, 'utf8') > limit) {
+						// Truncate by bytes to avoid splitting multi-byte chars incorrectly
+						let bytes = Buffer.from(text, 'utf8').subarray(0, limit);
+						text = bytes.toString('utf8');
+						truncatedNote = `\n\n[Truncated output to ${limit} bytes]`;
+					}
+
+					const relative = path.relative(workspacePath, normalizedResolved) || path.basename(normalizedResolved);
+					const header = `File: ${relative}`;
+					return { success: true, result: `${header}\n\n\u0060\u0060\u0060\n${text}\n\u0060\u0060\u0060${truncatedNote}` };
+				} catch (error) {
+					return { success: false, error: `Error reading file: ${error.message}` };
 				}
 			default:
 				return {
