@@ -104,8 +104,10 @@ class ConversationProvider {
 		const nonce = Math.random().toString(36).slice(2);
 		const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
 		const scriptUri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'webview.js'));
+		const styleUri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'webview.css'));
 		webviewView.webview.html = getReactHtml({
 			scriptUri: scriptUri.toString(),
+			styleUri: styleUri.toString(),
 			cspSource: webviewView.webview.cspSource,
 			nonce
 		});

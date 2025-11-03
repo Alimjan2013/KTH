@@ -22,7 +22,14 @@ export default defineConfig({
 		},
 		rollupOptions: {
 			output: {
-				compact: true
+				compact: true,
+				assetFileNames: (assetInfo) => {
+					const name = assetInfo.name || '';
+					if (name.endsWith('.css')) {
+						return 'webview.css';
+					}
+					return 'assets/[name][extname]';
+				},
 			}
 		}
 	}

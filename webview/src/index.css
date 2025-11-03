@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VS Code theme bridging */
+:root {
+	--bg: var(--vscode-editor-background);
+	--fg: var(--vscode-foreground);
+	--muted: var(--vscode-descriptionForeground);
+	--btn-bg: var(--vscode-button-background);
+	--btn-fg: var(--vscode-button-foreground);
+	--panel-border: var(--vscode-panel-border);
+}
+
+body { background-color: var(--bg); color: var(--fg); }
+
+

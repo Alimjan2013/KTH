@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import './index.css';
 import { createRoot } from 'react-dom/client';
 
 function App() {
@@ -47,36 +48,36 @@ function App() {
 	}
 
 	return (
-		<div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-			<div ref={containerRef} className="conversation-container" style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+		<div className="h-screen flex flex-col">
+			<div ref={containerRef} className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
 				{messages.length === 0 && (
-					<div className="welcome-message" style={{ textAlign: 'center', padding: '40px 20px', opacity: 0.7 }}>
+					<div className="text-center py-10 opacity-70">
 						Start a conversation by typing a message below
 					</div>
 				)}
 				{messages.map((m, i) => (
-					<div key={i} className={`message ${m.isBot ? 'bot' : 'user'}`} style={{ alignSelf: m.isBot ? 'flex-start' : 'flex-end', maxWidth: '80%' }}>
-						<div className={`message-bubble ${m.isTree ? 'tree-message' : m.isBot ? 'markdown-content' : ''}`} style={{ padding: '10px 14px', borderRadius: 12, background: m.isBot ? 'var(--vscode-input-background)' : 'var(--vscode-button-background)', color: m.isBot ? 'var(--vscode-foreground)' : 'var(--vscode-button-foreground)', border: m.isBot ? '1px solid var(--vscode-input-border)' : 'none', whiteSpace: m.isTree ? 'pre-wrap' : undefined }}
+					<div key={i} className={`max-w-[80%] ${m.isBot ? 'self-start' : 'self-end'}`}>
+						<div className={`${m.isTree ? '' : ''} rounded-xl px-3 py-2 ${m.isBot ? 'bg-[var(--vscode-input-background)] text-[var(--vscode-foreground)] border border-[var(--vscode-input-border)]' : 'bg-[var(--btn-bg)] text-[var(--btn-fg)]'} ${m.isTree ? 'whitespace-pre-wrap font-mono text-[12px] max-h-96 overflow-y-auto p-3' : ''}`}
 							dangerouslySetInnerHTML={m.isBot && !m.isTree ? { __html: (window.marked ? window.marked.parse(m.text, { breaks: true, gfm: true }) : m.text) } : undefined}>
 							{(m.isBot && !m.isTree) ? null : m.text}
 						</div>
-						<div className="message-time" style={{ fontSize: 11, opacity: 0.7, marginTop: 4, padding: '0 4px', textAlign: m.isBot ? 'left' : 'right' }}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+						<div className={`text-[11px] opacity-70 mt-1 px-1 ${m.isBot ? 'text-left' : 'text-right'}`}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
 					</div>
 				))}
 				{typing && (
-					<div className="message bot" style={{ alignSelf: 'flex-start', maxWidth: '80%' }}>
-						<div className="message-bubble typing-indicator" style={{ padding: '10px 14px', borderRadius: 12, display: 'flex', gap: 4 }}>
-							<span className="dot" style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--vscode-descriptionForeground)', opacity: 0.8 }} />
-							<span className="dot" style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--vscode-descriptionForeground)', opacity: 0.6 }} />
-							<span className="dot" style={{ width: 8, height: 8, borderRadius: 999, background: 'var(--vscode-descriptionForeground)', opacity: 0.4 }} />
+					<div className="self-start max-w-[80%]">
+						<div className="rounded-xl px-3 py-2 flex gap-1">
+							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-80" />
+							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-60" />
+							<span className="w-2 h-2 rounded-full bg-[var(--muted)] opacity-40" />
 						</div>
 					</div>
 				)}
 			</div>
-			<div className="input-container" style={{ padding: 12, borderTop: '1px solid var(--vscode-panel-border)', display: 'flex', gap: 8 }}>
-				<button id="showTreeButton" title="Show directory tree" onClick={requestTree} style={{ padding: '8px 12px', background: 'var(--vscode-button-secondaryBackground)', color: 'var(--vscode-button-secondaryForeground)', border: 0, borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>📁 Tree</button>
-				<input id="messageInput" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter') send(); }} placeholder="Type your message..." style={{ flex: 1, padding: '8px 12px', border: '1px solid var(--vscode-input-border)', borderRadius: 4, background: 'var(--vscode-input-background)', color: 'var(--vscode-input-foreground)' }} />
-				<button id="sendButton" onClick={send} style={{ padding: '8px 16px', background: 'var(--vscode-button-background)', color: 'var(--vscode-button-foreground)', border: 0, borderRadius: 4, cursor: 'pointer' }}>Send</button>
+			<div className="p-3 border-t border-[var(--panel-border)] flex gap-2">
+				<button id="showTreeButton" title="Show directory tree" onClick={requestTree} className="px-3 py-2 rounded bg-[var(--vscode-button-secondaryBackground)] text-[var(--vscode-button-secondaryForeground)] text-xs">📁 Tree</button>
+				<input id="messageInput" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e)=>{ if (e.key==='Enter') send(); }} placeholder="Type your message..." className="flex-1 px-3 py-2 rounded border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] text-[var(--vscode-input-foreground)]" />
+				<button id="sendButton" onClick={send} className="px-4 py-2 rounded bg-[var(--btn-bg)] text-[var(--btn-fg)]">Send</button>
 			</div>
 		</div>
 	);
