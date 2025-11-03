@@ -2,7 +2,7 @@ const vscode = require('vscode');
 const path = require('path');
 const fs = require('fs');
 const dirTree = require('./services/dirTree');
-const { getConversationHtml } = require('./ui/conversationHtml');
+const { getReactHtml } = require('./ui/conversationHtml');
 
 class ConversationProvider {
 	constructor(context) {
@@ -101,7 +101,14 @@ class ConversationProvider {
 			]
 		};
 
-		webviewView.webview.html = getConversationHtml();
+		const nonce = Math.random().toString(36).slice(2);
+		const mediaRoot = vscode.Uri.joinPath(this.context.extensionUri, 'media');
+		const scriptUri = webviewView.webview.asWebviewUri(vscode.Uri.joinPath(mediaRoot, 'webview.js'));
+		webviewView.webview.html = getReactHtml({
+			scriptUri: scriptUri.toString(),
+			cspSource: webviewView.webview.cspSource,
+			nonce
+		});
 		console.log('Webview HTML set');
 
 		// Send initial mock conversation data when webview is ready
