@@ -28,6 +28,7 @@ class ConversationProvider {
 			
 			// Initialize OpenAI with API key from .env
 			this.openai = new OpenAI({
+				baseURL: 'https://ai-gateway.vercel.sh/v1',
 				apiKey: this.openaiApiKey
 			});
 			
@@ -301,7 +302,7 @@ class ConversationProvider {
 
 			// Call OpenAI API with tools
 			const response = await this.openai.chat.completions.create({
-				model: 'gpt-4o',
+				model: 'minimax/minimax-m2',
 				messages: messages,
 				tools: this._getAvailableTools(),
 				tool_choice: 'auto',
