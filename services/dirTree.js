@@ -68,6 +68,11 @@ async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePa
 	const skipDirs = ['node_modules', '.git', '.vscode', 'dist', 'build', '.next', 'out'];
 	const dirName = path.basename(dirPath);
 	if (skipDirs.includes(dirName) && depth > 0) return tree;
+	
+	// Use a counter for throttling to avoid modulo calculation on every file
+	let filesSinceLastUpdate = 0;
+	const fileProgressThreshold = 10;
+	
 	try {
 		const entries = fs.readdirSync(dirPath, { withFileTypes: true });
 		entries.sort((a, b) => {
@@ -87,9 +92,11 @@ async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePa
 				await readDirectoryTree(fullPath, relPath, tree, depth + 1, gitignorePatterns, progressCallback);
 			} else {
 				tree.push({ name: entry.name, path: relPath, type: 'file', depth });
-				// Report progress for files (throttled to every 10 files to reduce overhead)
-				if (progressCallback && tree.length % 10 === 0) {
+				// Report progress for files (throttled to reduce overhead)
+				filesSinceLastUpdate++;
+				if (progressCallback && filesSinceLastUpdate >= fileProgressThreshold) {
 					progressCallback({ type: 'file', path: relPath, total: tree.length });
+					filesSinceLastUpdate = 0;
 				}
 			}
 		}
