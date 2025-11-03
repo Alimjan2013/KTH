@@ -4,6 +4,7 @@ export function useVSCodeMessaging() {
 	const vscode = useMemo(() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null), []);
 	const [messages, setMessages] = useState([]);
 	const [typing, setTyping] = useState(false);
+	const [progress, setProgress] = useState(null);
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -19,6 +20,15 @@ export function useVSCodeMessaging() {
 				case 'setTyping':
 					setTyping(!!msg.typing);
 					break;
+				case 'showProgress':
+					setProgress(msg.text);
+					break;
+				case 'updateProgress':
+					setProgress(msg.text);
+					break;
+				case 'hideProgress':
+					setProgress(null);
+					break;
 			}
 		};
 		window.addEventListener('message', handler);
@@ -33,7 +43,7 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'requestDirectoryTree' });
 	}
 
-	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree };
+	return { messages, setMessages, typing, setTyping, progress, sendUserMessage, requestDirectoryTree };
 }
 
 

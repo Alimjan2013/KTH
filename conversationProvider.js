@@ -18,6 +18,14 @@ class ConversationProvider {
 	}
 
 	async _answerWithDirectoryTree(userText) {
+		// Show progress: analyzing codebase
+		if (this._view) {
+			this._view.webview.postMessage({
+				command: 'showProgress',
+				text: 'Analyzing codebase structure...'
+			});
+		}
+		
 		const treeText = await this._getDirectoryTreeAsText();
 		const gateway = createGateway({ apiKey: this.openaiApiKey, baseUrl: this.gatewayBaseUrl || undefined });
 		const prompt = [
@@ -28,6 +36,14 @@ class ConversationProvider {
 			'',
 			'Please summarize the project structure (key folders/files, roles, and any notable patterns). Be concise and actionable.'
 		].join('\n');
+
+		// Show progress: waiting for AI response
+		if (this._view) {
+			this._view.webview.postMessage({
+				command: 'updateProgress',
+				text: 'Generating response with AI...'
+			});
+		}
 
 		let finalResponse = '';
 		try {
@@ -48,6 +64,7 @@ class ConversationProvider {
 
 		this.conversationHistory.push({ role: 'assistant', content: finalResponse });
 		if (this._view) {
+			this._view.webview.postMessage({ command: 'hideProgress' });
 			this._view.webview.postMessage({ command: 'setTyping', typing: false });
 			this._view.webview.postMessage({ command: 'receiveMessage', text: finalResponse, isBot: true });
 		}
@@ -317,10 +334,52 @@ class ConversationProvider {
 		try {
 			const workspacePath = workspaceFolders[0].uri.fsPath;
 			const gitignorePatterns = dirTree.readGitignore(workspacePath);
-			const tree = await dirTree.readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns);
+			
+			// Send initial progress message
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'showProgress',
+					text: 'Scanning workspace...'
+				});
+			}
+			
+			// Create progress callback
+			const progressCallback = (progress) => {
+				if (this._view && progress.total % 50 === 0) {
+					this._view.webview.postMessage({
+						command: 'updateProgress',
+						text: `Scanned ${progress.total} items...`
+					});
+				}
+			};
+			
+			const tree = await dirTree.readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns, progressCallback);
+			
+			// Send completion message
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'updateProgress',
+					text: `Scan complete: ${tree.length} items found. Formatting...`
+				});
+			}
+			
 			const formattedTree = dirTree.formatTree(tree, workspacePath);
+			
+			// Clear progress message
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'hideProgress'
+				});
+			}
+			
 			return formattedTree;
 		} catch (error) {
+			// Clear progress on error
+			if (this._view) {
+				this._view.webview.postMessage({
+					command: 'hideProgress'
+				});
+			}
 			throw new Error(`Failed to read directory tree: ${error.message}`);
 		}
 	}
@@ -357,6 +416,14 @@ class ConversationProvider {
                 }),
             };
 
+            // Show progress: processing with AI
+            if (this._view) {
+                this._view.webview.postMessage({
+                    command: 'showProgress',
+                    text: 'Processing your request with AI...'
+                });
+            }
+
             let finalResponse = '';
             try {
                 const result = await generateText({
@@ -387,6 +454,10 @@ class ConversationProvider {
 			// Send response to webview
 			if (this._view) {
 				this._view.webview.postMessage({
+					command: 'hideProgress'
+				});
+				
+				this._view.webview.postMessage({
 					command: 'setTyping',
 					typing: false
 				});
@@ -404,6 +475,10 @@ class ConversationProvider {
 
 		// If we've iterated too many times, send an error
 		if (this._view) {
+			this._view.webview.postMessage({
+				command: 'hideProgress'
+			});
+			
 			this._view.webview.postMessage({
 				command: 'setTyping',
 				typing: false
@@ -432,10 +507,40 @@ class ConversationProvider {
 
 		try {
 			const workspacePath = workspaceFolders[0].uri.fsPath;
+			
+			// Send initial progress message
+			webview.postMessage({
+				command: 'showProgress',
+				text: 'Scanning workspace...'
+			});
+			
 			// Read and parse .gitignore
 			const gitignorePatterns = dirTree.readGitignore(workspacePath);
-			const tree = await dirTree.readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns);
+			
+			// Create progress callback
+			const progressCallback = (progress) => {
+				if (progress.total % 50 === 0) {
+					webview.postMessage({
+						command: 'updateProgress',
+						text: `Scanned ${progress.total} items...`
+					});
+				}
+			};
+			
+			const tree = await dirTree.readDirectoryTree(workspacePath, '', [], 0, gitignorePatterns, progressCallback);
+			
+			// Update progress with completion
+			webview.postMessage({
+				command: 'updateProgress',
+				text: `Scan complete: ${tree.length} items found. Formatting...`
+			});
+			
 			const formattedTree = dirTree.formatTree(tree, workspacePath);
+			
+			// Clear progress
+			webview.postMessage({
+				command: 'hideProgress'
+			});
 			
 			webview.postMessage({
 				command: 'receiveMessage',
@@ -445,6 +550,10 @@ class ConversationProvider {
 			});
 		} catch (error) {
 			console.error('Error reading directory tree:', error);
+			// Clear progress on error
+			webview.postMessage({
+				command: 'hideProgress'
+			});
 			webview.postMessage({
 				command: 'receiveMessage',
 				text: `Error reading directory tree: ${error.message}`,
