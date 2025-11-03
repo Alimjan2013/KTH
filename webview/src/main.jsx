@@ -8,6 +8,42 @@ function App() {
 	const [input, setInput] = useState('');
 	const [typing, setTyping] = useState(false);
 	const containerRef = useRef(null);
+	const mdLibRef = useRef(null);
+
+	useEffect(() => {
+		// Lazy-load streamdown for markdown rendering
+		import('streamdown')
+			.then((mod) => {
+				mdLibRef.current = mod;
+			})
+			.catch(() => {
+				mdLibRef.current = null;
+			});
+	}, []);
+
+	function renderMarkdown(text) {
+		try {
+			const mod = mdLibRef.current;
+			if (mod) {
+				// Try common APIs
+				if (typeof mod.renderToHtml === 'function') {
+					return mod.renderToHtml(text);
+				}
+				if (typeof mod.default === 'function') {
+					return mod.default(text);
+				}
+				if (mod.Streamdown) {
+					const r = new mod.Streamdown();
+					if (typeof r.render === 'function') return r.render(text);
+				}
+			}
+			// Fallback to marked if present
+			if (window.marked) return window.marked.parse(text, { breaks: true, gfm: true });
+			return text;
+		} catch {
+			return text;
+		}
+	}
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -58,7 +94,7 @@ function App() {
 				{messages.map((m, i) => (
 					<div key={i} className={`max-w-[80%] ${m.isBot ? 'self-start' : 'self-end'}`}>
 						<div className={`${m.isTree ? '' : ''} rounded-xl px-3 py-2 ${m.isBot ? 'bg-[var(--vscode-input-background)] text-[var(--vscode-foreground)] border border-[var(--vscode-input-border)]' : 'bg-[var(--btn-bg)] text-[var(--btn-fg)]'} ${m.isTree ? 'whitespace-pre-wrap font-mono text-[12px] max-h-96 overflow-y-auto p-3' : ''}`}
-							dangerouslySetInnerHTML={m.isBot && !m.isTree ? { __html: (window.marked ? window.marked.parse(m.text, { breaks: true, gfm: true }) : m.text) } : undefined}>
+							dangerouslySetInnerHTML={m.isBot && !m.isTree ? { __html: renderMarkdown(m.text) } : undefined}>
 							{(m.isBot && !m.isTree) ? null : m.text}
 						</div>
 						<div className={`text-[11px] opacity-70 mt-1 px-1 ${m.isBot ? 'text-left' : 'text-right'}`}>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>

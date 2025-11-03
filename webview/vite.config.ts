@@ -1,9 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwind from '@tailwindcss/vite';
 import { resolve } from 'path';
 
 export default defineConfig({
-	plugins: [react()],
+	plugins: [
+		// Tailwind v4 Vite plugin
+		tailwind(),
+		react(),
+	],
 	define: {
 		'process.env.NODE_ENV': JSON.stringify('production'),
 		'process.env': {},
