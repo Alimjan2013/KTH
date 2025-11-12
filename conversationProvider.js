@@ -215,7 +215,7 @@ Respond in JSON format:
 }`;
 
 					const response = await this.openai.chat.completions.create({
-						model: 'minimax/minimax-m2',
+						model: 'moonshotai/kimi-k2-thinking',
 						messages: [
 							{
 								role: 'system',
