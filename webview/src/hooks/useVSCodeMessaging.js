@@ -33,7 +33,11 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'requestDirectoryTree' });
 	}
 
-	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree };
+	function openExternalUrl(url) {
+		vscode?.postMessage({ command: 'openExternal', url });
+	}
+
+	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree, openExternalUrl };
 }
 
 

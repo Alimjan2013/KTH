@@ -129,6 +129,11 @@ class ConversationProvider {
 					case 'requestDirectoryTree':
 						this._sendDirectoryTree(webviewView.webview);
 						return;
+					case 'openExternal':
+						if (message.url) {
+							vscode.env.openExternal(vscode.Uri.parse(message.url));
+						}
+						return;
 				}
 			},
 			null,
