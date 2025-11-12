@@ -37,7 +37,11 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'openExternal', url });
 	}
 
-	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree, openExternalUrl };
+	function openEnvFile() {
+		vscode?.postMessage({ command: 'openEnvFile' });
+	}
+
+	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree, openExternalUrl, openEnvFile };
 }
 
 
