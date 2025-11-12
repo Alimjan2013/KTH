@@ -129,6 +129,14 @@ class ConversationProvider {
 					case 'requestDirectoryTree':
 						this._sendDirectoryTree(webviewView.webview);
 						return;
+					case 'openExternal':
+						if (message.url) {
+							vscode.env.openExternal(vscode.Uri.parse(message.url));
+						}
+						return;
+					case 'openEnvFile':
+						this._openEnvFile();
+						return;
 				}
 			},
 			null,
@@ -737,6 +745,63 @@ class ConversationProvider {
 
 		formatted += `\`\`\``;
 		return formatted;
+	}
+
+	async _openEnvFile() {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				vscode.window.showWarningMessage('No workspace folder is currently open.');
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const envPath = path.join(workspacePath, '.env');
+			const envUri = vscode.Uri.file(envPath);
+
+			// Read existing .env file content or create empty string
+			let envContent = '';
+			if (fs.existsSync(envPath)) {
+				envContent = fs.readFileSync(envPath, 'utf8');
+			}
+
+			// Check if the required Supabase keys exist
+			const hasSupabaseUrl = envContent.includes('NEXT_PUBLIC_SUPABASE_URL=');
+			const hasSupabaseKey = envContent.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=');
+
+			// Add missing keys
+			let contentUpdated = false;
+			if (!hasSupabaseUrl || !hasSupabaseKey) {
+				// Ensure content ends with a newline if it's not empty
+				if (envContent && !envContent.endsWith('\n')) {
+					envContent += '\n';
+				}
+				
+				// Add missing keys
+				if (!hasSupabaseUrl) {
+					envContent += 'NEXT_PUBLIC_SUPABASE_URL=\n';
+					contentUpdated = true;
+				}
+				if (!hasSupabaseKey) {
+					envContent += 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n';
+					contentUpdated = true;
+				}
+
+				// Write updated content back to file
+				if (contentUpdated) {
+					fs.writeFileSync(envPath, envContent, 'utf8');
+					vscode.window.showInformationMessage('Added missing Supabase environment variables to .env file.');
+				}
+			}
+
+			// Open the file in VS Code
+			const document = await vscode.workspace.openTextDocument(envUri);
+			await vscode.window.showTextDocument(document, { preview: false });
+		} catch (error) {
+			console.error('Error opening .env file:', error);
+			vscode.window.showErrorMessage(`Failed to open .env file: ${error.message}`);
+		}
 	}
 
 }

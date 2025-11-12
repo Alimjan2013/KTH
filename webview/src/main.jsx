@@ -6,7 +6,7 @@ import { InputBar } from './components/InputBar.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
-	const { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree } = useVSCodeMessaging();
+	const { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree, openExternalUrl, openEnvFile } = useVSCodeMessaging();
 	const [input, setInput] = useState('');
 	
 
@@ -23,10 +23,18 @@ function App() {
 		requestDirectoryTree();
 	}
 
+	function openSupabaseDocs() {
+		openExternalUrl('https://supabase.com/docs/guides/auth');
+	}
+
+	function handleOpenEnvFile() {
+		openEnvFile();
+	}
+
 	return (
 		<div className="h-screen flex flex-col">
 			<MessageList messages={messages} typing={typing} />
-			<InputBar input={input} setInput={setInput} onSend={send} onTree={requestTree} />
+			<InputBar input={input} setInput={setInput} onSend={send} onTree={requestTree} onOpenSupabaseDocs={openSupabaseDocs} onOpenEnvFile={handleOpenEnvFile} />
 		</div>
 	);
 }
