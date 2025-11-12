@@ -188,7 +188,19 @@ class ConversationProvider {
 					const analysisPrompt = `Analyze this codebase and provide:
 1. A brief description (2-3 sentences) of what type of project this is
 2. A list of key features/technologies detected (as a JSON array)
-3. A mermaid diagram showing the project structure (use graph TD format)
+3. A mermaid diagram showing the FEATURE-BASED structure (NOT a directory tree structure). Show the application's features, pages, or main components and their relationships. Use subgraphs to group related features. Example format:
+
+graph TD
+    subgraph Feature1["Feature Name"]
+        direction TB
+        A[Component A]
+        B[Component B]
+    end
+    subgraph Feature2["Another Feature"]
+        direction TB
+        C[Component C]
+    end
+    Feature1 --> Feature2
 
 Directory Tree:
 ${treeText.substring(0, 3000)}
@@ -207,7 +219,7 @@ Respond in JSON format:
 						messages: [
 							{
 								role: 'system',
-								content: 'You are a codebase analysis assistant. Analyze codebases and provide structured summaries with mermaid diagrams.'
+								content: 'You are a codebase analysis assistant. Analyze codebases and provide structured summaries with feature-based mermaid diagrams. Create diagrams that show application features, pages, or main components grouped in subgraphs, NOT directory tree structures.'
 							},
 							{
 								role: 'user',
@@ -229,25 +241,25 @@ Respond in JSON format:
 						
 						analysisDescription = parsed.description || 'This is a codebase project.';
 						features = Array.isArray(parsed.features) ? parsed.features : [];
-						mermaidDiagram = parsed.mermaid || this._generateSimpleMermaid(treeText);
+						mermaidDiagram = parsed.mermaid || this._generateSimpleMermaid(treeText, features);
 					} catch (parseError) {
 						// Fallback: extract information from text response
 						analysisDescription = content.substring(0, 500);
 						features = this._extractFeaturesFromText(content);
-						mermaidDiagram = this._generateSimpleMermaid(treeText);
+						mermaidDiagram = this._generateSimpleMermaid(treeText, features);
 					}
 				} catch (openaiError) {
 					console.error('OpenAI analysis error:', openaiError);
 					// Fallback analysis
 					analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
 					features = this._extractFeaturesFromPackageJson(packageJsonContent);
-					mermaidDiagram = this._generateSimpleMermaid(treeText);
+					mermaidDiagram = this._generateSimpleMermaid(treeText, features);
 				}
 			} else {
 				// Fallback when OpenAI is not available
 				analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
 				features = this._extractFeaturesFromPackageJson(packageJsonContent);
-				mermaidDiagram = this._generateSimpleMermaid(treeText);
+				mermaidDiagram = this._generateSimpleMermaid(treeText, features);
 			}
 			
 			// Send final result
@@ -344,50 +356,75 @@ Respond in JSON format:
 		return features;
 	}
 
-	_generateSimpleMermaid(treeText) {
-		// Generate a simple mermaid diagram from directory tree
-		const lines = treeText.split('\n').filter(line => line.trim());
-		const structure = {};
-		const rootName = 'Project Root';
+	_generateSimpleMermaid(treeText, features = []) {
+		// Generate a feature-based mermaid diagram
+		let mermaid = 'graph TD\n';
 		
-		// Parse tree structure
-		for (const line of lines) {
-			if (line.includes('📁') || line.includes('📄')) {
-				const match = line.match(/[├└│─\s]*(📁|📄)\s*(.+)/);
-				if (match) {
-					const name = match[2].trim();
-					const depth = (line.match(/[├└│]/g) || []).length;
-					
-					if (depth === 0) {
-						// Root level
-						if (!structure[rootName]) {
-							structure[rootName] = [];
+		// If we have features, use them to create feature-based subgraphs
+		if (features && features.length > 0) {
+			const featureGroups = features.slice(0, 5); // Limit to 5 features
+			
+			featureGroups.forEach((feature, idx) => {
+				const featureId = `Feature${idx}`;
+				const featureName = feature.length > 30 ? feature.substring(0, 30) : feature;
+				mermaid += `\n    subgraph ${featureId}["${featureName}"]\n`;
+				mermaid += `        direction TB\n`;
+				mermaid += `        ${featureId}_A[${featureName} Component]\n`;
+				mermaid += `    end\n`;
+			});
+			
+			// Add connections between features
+			for (let i = 0; i < featureGroups.length - 1; i++) {
+				mermaid += `    Feature${i} --> Feature${i + 1}\n`;
+			}
+		} else {
+			// Fallback: try to infer features from directory structure
+			const lines = treeText.split('\n').filter(line => line.trim());
+			const potentialFeatures = [];
+			
+			// Look for common feature indicators in directory names
+			for (const line of lines) {
+				if (line.includes('📁')) {
+					const match = line.match(/[├└│─\s]*📁\s*(.+)/);
+					if (match) {
+						const dirName = match[1].trim().toLowerCase();
+						// Common feature patterns
+						if (dirName.includes('auth') || dirName.includes('login') || dirName.includes('user')) {
+							if (!potentialFeatures.includes('Authentication')) potentialFeatures.push('Authentication');
 						}
-						structure[rootName].push(name);
-					} else if (depth === 1) {
-						// First level directories
-						if (!structure[rootName]) {
-							structure[rootName] = [];
+						if (dirName.includes('api') || dirName.includes('route')) {
+							if (!potentialFeatures.includes('API')) potentialFeatures.push('API');
 						}
-						structure[rootName].push(name);
+						if (dirName.includes('page') || dirName.includes('view') || dirName.includes('component')) {
+							if (!potentialFeatures.includes('UI Components')) potentialFeatures.push('UI Components');
+						}
+						if (dirName.includes('db') || dirName.includes('database') || dirName.includes('model')) {
+							if (!potentialFeatures.includes('Database')) potentialFeatures.push('Database');
+						}
 					}
 				}
 			}
-		}
-		
-		// Generate mermaid diagram
-		let mermaid = 'graph TD\n';
-		
-		if (structure[rootName] && structure[rootName].length > 0) {
-			const topLevel = structure[rootName].slice(0, 10); // Limit to 10 items
-			topLevel.forEach((item, idx) => {
-				const nodeId = `A${idx}`;
-				const label = item.length > 30 ? item.substring(0, 30) + '...' : item;
-				mermaid += `  ${nodeId}["${label}"]\n`;
-				mermaid += `  Root["${rootName}"] --> ${nodeId}\n`;
-			});
-		} else {
-			mermaid += `  Root["${rootName}"]\n`;
+			
+			if (potentialFeatures.length > 0) {
+				potentialFeatures.slice(0, 4).forEach((feature, idx) => {
+					const featureId = `Feature${idx}`;
+					mermaid += `\n    subgraph ${featureId}["${feature}"]\n`;
+					mermaid += `        direction TB\n`;
+					mermaid += `        ${featureId}_A[${feature} Module]\n`;
+					mermaid += `    end\n`;
+				});
+				
+				// Add connections
+				for (let i = 0; i < potentialFeatures.length - 1 && i < 3; i++) {
+					mermaid += `    Feature${i} --> Feature${i + 1}\n`;
+				}
+			} else {
+				// Ultimate fallback: generic structure
+				mermaid += `    subgraph App["Application"]\n`;
+				mermaid += `        direction TB\n`;
+				mermaid += `        A[Main Module]\n`;
+				mermaid += `    end\n`;
+			}
 		}
 		
 		return mermaid;
@@ -624,12 +661,12 @@ Respond in JSON format:
 
 			// Call OpenAI API with tools
 			const response = await this.openai.chat.completions.create({
-				model: 'minimax/minimax-m2',
+				model: 'moonshotai/kimi-k2-thinking',
 				messages: messages,
 				tools: this._getAvailableTools(),
 				tool_choice: 'auto',
 				temperature: 0.7,
-				max_tokens: 2000
+				max_tokens: 10000
 			});
 
 			const assistantMessage = response.choices[0].message;
