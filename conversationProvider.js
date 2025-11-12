@@ -129,6 +129,9 @@ class ConversationProvider {
 					case 'requestDirectoryTree':
 						this._sendDirectoryTree(webviewView.webview);
 						return;
+					case 'startAnalysis':
+						this._startAnalysis(webviewView.webview);
+						return;
 				}
 			},
 			null,
@@ -137,18 +140,257 @@ class ConversationProvider {
 	}
 
 	_loadInitialMockData(webview) {
-		// Initial welcome message
-		setTimeout(() => {
-			const welcomeMessage = this.openai 
-				? "Hello! I'm powered by GPT-4o and ready to help you learn. Try asking me to 'show directory tree' or ask me any questions!"
-				: "Hello! I'm here to help you learn. To enable AI features, please add OPENAI_API_KEY to your .env file in the workspace root.";
+		// No initial message needed for scene-based UI
+	}
+
+	async _startAnalysis(webview) {
+		try {
+			// Step 1: Reading directory tree
+			this._sendAnalysisStep(webview, 'Reading directory tree from codebase...');
+			await this._delay(1000);
 			
+			const treeText = await this._getDirectoryTreeAsText();
+			
+			// Step 2: Analyzing project structure
+			this._sendAnalysisStep(webview, 'Analyzing project structure...');
+			await this._delay(1000);
+			
+			// Step 3: Reading key files
+			this._sendAnalysisStep(webview, 'Reading key configuration files...');
+			await this._delay(1000);
+			
+			// Read package.json if it exists
+			let packageJsonContent = '';
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (workspaceFolders && workspaceFolders.length > 0) {
+				const workspacePath = workspaceFolders[0].uri.fsPath;
+				const packageJsonPath = path.join(workspacePath, 'package.json');
+				if (fs.existsSync(packageJsonPath)) {
+					packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+				}
+			}
+			
+			// Step 4: Analyzing dependencies and features
+			this._sendAnalysisStep(webview, 'Analyzing dependencies and features...');
+			await this._delay(1000);
+			
+			// Step 5: Generating codebase summary
+			this._sendAnalysisStep(webview, 'Generating codebase summary...');
+			await this._delay(1000);
+			
+			// Use OpenAI to analyze the codebase
+			let analysisDescription = '';
+			let features = [];
+			let mermaidDiagram = '';
+			
+			if (this.openai && this.openaiApiKey) {
+				try {
+					const analysisPrompt = `Analyze this codebase and provide:
+1. A brief description (2-3 sentences) of what type of project this is
+2. A list of key features/technologies detected (as a JSON array)
+3. A mermaid diagram showing the project structure (use graph TD format)
+
+Directory Tree:
+${treeText.substring(0, 3000)}
+
+${packageJsonContent ? `Package.json:\n${packageJsonContent.substring(0, 2000)}` : ''}
+
+Respond in JSON format:
+{
+  "description": "...",
+  "features": ["feature1", "feature2", ...],
+  "mermaid": "graph TD\n  ..."
+}`;
+
+					const response = await this.openai.chat.completions.create({
+						model: 'minimax/minimax-m2',
+						messages: [
+							{
+								role: 'system',
+								content: 'You are a codebase analysis assistant. Analyze codebases and provide structured summaries with mermaid diagrams.'
+							},
+							{
+								role: 'user',
+								content: analysisPrompt
+							}
+						],
+						temperature: 0.7,
+						max_tokens: 2000
+					});
+
+					const content = response.choices[0].message.content;
+					
+					// Try to parse JSON from the response
+					try {
+						// Extract JSON from markdown code blocks if present
+						const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
+						const jsonText = jsonMatch ? jsonMatch[1] : content;
+						const parsed = JSON.parse(jsonText.trim());
+						
+						analysisDescription = parsed.description || 'This is a codebase project.';
+						features = Array.isArray(parsed.features) ? parsed.features : [];
+						mermaidDiagram = parsed.mermaid || this._generateSimpleMermaid(treeText);
+					} catch (parseError) {
+						// Fallback: extract information from text response
+						analysisDescription = content.substring(0, 500);
+						features = this._extractFeaturesFromText(content);
+						mermaidDiagram = this._generateSimpleMermaid(treeText);
+					}
+				} catch (openaiError) {
+					console.error('OpenAI analysis error:', openaiError);
+					// Fallback analysis
+					analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
+					features = this._extractFeaturesFromPackageJson(packageJsonContent);
+					mermaidDiagram = this._generateSimpleMermaid(treeText);
+				}
+			} else {
+				// Fallback when OpenAI is not available
+				analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
+				features = this._extractFeaturesFromPackageJson(packageJsonContent);
+				mermaidDiagram = this._generateSimpleMermaid(treeText);
+			}
+			
+			// Send final result
 			webview.postMessage({
-				command: 'addMockMessage',
-				text: welcomeMessage,
-				isBot: true
+				command: 'analysisComplete',
+				description: analysisDescription,
+				features: features,
+				mermaid: mermaidDiagram
 			});
-		}, 100);
+		} catch (error) {
+			console.error('Analysis error:', error);
+			webview.postMessage({
+				command: 'analysisError',
+				error: error.message
+			});
+		}
+	}
+
+	_sendAnalysisStep(webview, step) {
+		webview.postMessage({
+			command: 'analysisStep',
+			step: step
+		});
+	}
+
+	_delay(ms) {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+
+	_generateFallbackDescription(treeText, packageJsonContent) {
+		let description = 'This is a codebase project.';
+		
+		if (packageJsonContent) {
+			try {
+				const pkg = JSON.parse(packageJsonContent);
+				if (pkg.name) {
+					description = `This is a ${pkg.name} project.`;
+				}
+				if (pkg.description) {
+					description += ` ${pkg.description}`;
+				}
+			} catch (e) {
+				// Ignore parse errors
+			}
+		}
+		
+		// Detect framework from tree structure
+		if (treeText.includes('node_modules')) {
+			description += ' It uses Node.js and npm dependencies.';
+		}
+		if (treeText.includes('src/') || treeText.includes('components/')) {
+			description += ' The project has a structured source code organization.';
+		}
+		
+		return description;
+	}
+
+	_extractFeaturesFromPackageJson(packageJsonContent) {
+		const features = [];
+		if (!packageJsonContent) return features;
+		
+		try {
+			const pkg = JSON.parse(packageJsonContent);
+			const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+			
+			// Detect common features
+			if (deps['react'] || deps['@react']) features.push('React');
+			if (deps['vue']) features.push('Vue.js');
+			if (deps['express']) features.push('Express.js');
+			if (deps['next']) features.push('Next.js');
+			if (deps['typescript']) features.push('TypeScript');
+			if (deps['tailwindcss']) features.push('Tailwind CSS');
+			if (deps['@supabase/supabase-js']) features.push('Supabase');
+			if (deps['mongodb'] || deps['mongoose']) features.push('MongoDB');
+			if (deps['pg'] || deps['postgresql']) features.push('PostgreSQL');
+		} catch (e) {
+			// Ignore parse errors
+		}
+		
+		return features;
+	}
+
+	_extractFeaturesFromText(text) {
+		const features = [];
+		const lowerText = text.toLowerCase();
+		
+		// Simple keyword detection
+		if (lowerText.includes('react')) features.push('React');
+		if (lowerText.includes('vue')) features.push('Vue.js');
+		if (lowerText.includes('express')) features.push('Express.js');
+		if (lowerText.includes('next')) features.push('Next.js');
+		if (lowerText.includes('typescript')) features.push('TypeScript');
+		
+		return features;
+	}
+
+	_generateSimpleMermaid(treeText) {
+		// Generate a simple mermaid diagram from directory tree
+		const lines = treeText.split('\n').filter(line => line.trim());
+		const structure = {};
+		const rootName = 'Project Root';
+		
+		// Parse tree structure
+		for (const line of lines) {
+			if (line.includes('📁') || line.includes('📄')) {
+				const match = line.match(/[├└│─\s]*(📁|📄)\s*(.+)/);
+				if (match) {
+					const name = match[2].trim();
+					const depth = (line.match(/[├└│]/g) || []).length;
+					
+					if (depth === 0) {
+						// Root level
+						if (!structure[rootName]) {
+							structure[rootName] = [];
+						}
+						structure[rootName].push(name);
+					} else if (depth === 1) {
+						// First level directories
+						if (!structure[rootName]) {
+							structure[rootName] = [];
+						}
+						structure[rootName].push(name);
+					}
+				}
+			}
+		}
+		
+		// Generate mermaid diagram
+		let mermaid = 'graph TD\n';
+		
+		if (structure[rootName] && structure[rootName].length > 0) {
+			const topLevel = structure[rootName].slice(0, 10); // Limit to 10 items
+			topLevel.forEach((item, idx) => {
+				const nodeId = `A${idx}`;
+				const label = item.length > 30 ? item.substring(0, 30) + '...' : item;
+				mermaid += `  ${nodeId}["${label}"]\n`;
+				mermaid += `  Root["${rootName}"] --> ${nodeId}\n`;
+			});
+		} else {
+			mermaid += `  Root["${rootName}"]\n`;
+		}
+		
+		return mermaid;
 	}
 
 	async _handleMessage(text) {

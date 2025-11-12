@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  mermaid:
+    specifier: ^11.12.1
+    version: 11.12.1
   react:
     specifier: 19.2.0
     version: 19.2.0

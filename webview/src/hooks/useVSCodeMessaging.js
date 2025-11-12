@@ -2,22 +2,25 @@ import { useEffect, useMemo, useState } from 'react';
 
 export function useVSCodeMessaging() {
 	const vscode = useMemo(() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null), []);
-	const [messages, setMessages] = useState([]);
-	const [typing, setTyping] = useState(false);
+	const [analysisSteps, setAnalysisSteps] = useState([]);
+	const [analysisResult, setAnalysisResult] = useState(null);
 
 	useEffect(() => {
 		const handler = (event) => {
 			const msg = event.data;
 			switch (msg.command) {
-				case 'receiveMessage':
-					setTyping(false);
-					setMessages((prev) => [...prev, { text: msg.text, isBot: !!msg.isBot, isTree: !!msg.isTree }]);
+				case 'analysisStep':
+					setAnalysisSteps((prev) => [...prev, msg.step]);
 					break;
-				case 'addMockMessage':
-					setMessages((prev) => [...prev, { text: msg.text, isBot: !!msg.isBot }]);
+				case 'analysisComplete':
+					setAnalysisResult({
+						description: msg.description,
+						features: msg.features || [],
+						mermaid: msg.mermaid || ''
+					});
 					break;
-				case 'setTyping':
-					setTyping(!!msg.typing);
+				case 'analysisError':
+					console.error('Analysis error:', msg.error);
 					break;
 			}
 		};
@@ -25,15 +28,13 @@ export function useVSCodeMessaging() {
 		return () => window.removeEventListener('message', handler);
 	}, []);
 
-	function sendUserMessage(text) {
-		vscode?.postMessage({ command: 'sendMessage', text });
+	function startAnalysis() {
+		setAnalysisSteps([]);
+		setAnalysisResult(null);
+		vscode?.postMessage({ command: 'startAnalysis' });
 	}
 
-	function requestDirectoryTree() {
-		vscode?.postMessage({ command: 'requestDirectoryTree' });
-	}
-
-	return { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree };
+	return { startAnalysis, analysisSteps, analysisResult };
 }
 
 

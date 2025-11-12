@@ -1,32 +1,34 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import './index.css';
 import { createRoot } from 'react-dom/client';
-import { MessageList } from './components/MessageList.jsx';
-import { InputBar } from './components/InputBar.jsx';
+import { Scene1Greeting } from './components/Scene1Greeting.jsx';
+import { Scene2Analyzing } from './components/Scene2Analyzing.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
-	const { messages, setMessages, typing, setTyping, sendUserMessage, requestDirectoryTree } = useVSCodeMessaging();
-	const [input, setInput] = useState('');
-	
+	const [currentScene, setCurrentScene] = useState(1);
+	const { startAnalysis, analysisSteps, analysisResult } = useVSCodeMessaging();
 
-	function send() {
-		const text = input.trim();
-		if (!text) return;
-		setMessages((prev) => [...prev, { text, isBot: false }]);
-		setInput('');
-		setTyping(true);
-		sendUserMessage(text);
+	function handleStartAnalyzing() {
+		setCurrentScene(2);
+		startAnalysis();
 	}
 
-	function requestTree() {
-		requestDirectoryTree();
+	function handleFeatureSelect(feature) {
+		console.log('Feature selected:', feature);
+		// TODO: Handle feature selection in future scenes
 	}
 
 	return (
 		<div className="h-screen flex flex-col">
-			<MessageList messages={messages} typing={typing} />
-			<InputBar input={input} setInput={setInput} onSend={send} onTree={requestTree} />
+			{currentScene === 1 && <Scene1Greeting onStartAnalyzing={handleStartAnalyzing} />}
+			{currentScene === 2 && (
+				<Scene2Analyzing
+					analysisSteps={analysisSteps}
+					analysisResult={analysisResult}
+					onFeatureSelect={handleFeatureSelect}
+				/>
+			)}
 		</div>
 	);
 }
