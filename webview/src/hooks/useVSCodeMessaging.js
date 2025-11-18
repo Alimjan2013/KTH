@@ -14,9 +14,8 @@ export function useVSCodeMessaging() {
 					break;
 				case 'analysisComplete':
 					setAnalysisResult({
-						description: msg.description,
-						features: msg.features || [],
-						mermaid: msg.mermaid || ''
+						markdown: msg.markdown || '',
+						features: msg.features || []
 					});
 					break;
 				case 'analysisError':

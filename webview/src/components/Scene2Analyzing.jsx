@@ -22,19 +22,9 @@ export function Scene2Analyzing({ analysisSteps, analysisResult, onFeatureSelect
 	const markdownContent = useMemo(() => {
 		if (!analysisResult) return '';
 		
-		let content = analysisResult.description || '';
-		
-		if (analysisResult.features && analysisResult.features.length > 0) {
-			content += '\n\n## Features Detected\n\n';
-			content += analysisResult.features.map(feature => `- ${feature}`).join('\n');
-		}
-		
-		if (analysisResult.mermaid) {
-			content += '\n\n## Codebase Structure\n\n';
-			content += analysisResult.mermaid;
-		}
-		
-		return content;
+		// Use markdown directly from the analysis result
+		// The markdown already includes description, features, and mermaid diagram
+		return analysisResult.markdown || '';
 	}, [analysisResult]);
 
 	return (

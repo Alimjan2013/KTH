@@ -3,6 +3,8 @@ const path = require('path');
 const fs = require('fs');
 const dirTree = require('./services/dirTree');
 const { getReactHtml } = require('./ui/conversationHtml');
+const AnalysisService = require('./services/analysisService');
+const prompts = require('./prompts/analysisPrompts');
 
 class ConversationProvider {
 	constructor(context) {
@@ -145,129 +147,25 @@ class ConversationProvider {
 
 	async _startAnalysis(webview) {
 		try {
-			// Step 1: Reading directory tree
-			this._sendAnalysisStep(webview, 'Reading directory tree from codebase...');
-			await this._delay(1000);
-			
-			const treeText = await this._getDirectoryTreeAsText();
-			
-			// Step 2: Analyzing project structure
-			this._sendAnalysisStep(webview, 'Analyzing project structure...');
-			await this._delay(1000);
-			
-			// Step 3: Reading key files
-			this._sendAnalysisStep(webview, 'Reading key configuration files...');
-			await this._delay(1000);
-			
-			// Read package.json if it exists
-			let packageJsonContent = '';
-			const workspaceFolders = vscode.workspace.workspaceFolders;
-			if (workspaceFolders && workspaceFolders.length > 0) {
-				const workspacePath = workspaceFolders[0].uri.fsPath;
-				const packageJsonPath = path.join(workspacePath, 'package.json');
-				if (fs.existsSync(packageJsonPath)) {
-					packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-				}
-			}
-			
-			// Step 4: Analyzing dependencies and features
-			this._sendAnalysisStep(webview, 'Analyzing dependencies and features...');
-			await this._delay(1000);
-			
-			// Step 5: Generating codebase summary
-			this._sendAnalysisStep(webview, 'Generating codebase summary...');
-			await this._delay(1000);
-			
-			// Use OpenAI to analyze the codebase
-			let analysisDescription = '';
-			let features = [];
-			let mermaidDiagram = '';
-			
-			if (this.openai && this.openaiApiKey) {
-				try {
-					const analysisPrompt = `Analyze this codebase and provide:
-1. A brief description (2-3 sentences) of what type of project this is
-2. A list of key features/technologies detected (as a JSON array)
-3. A mermaid diagram showing the FEATURE-BASED structure (NOT a directory tree structure). Show the application's features, pages, or main components and their relationships. Use subgraphs to group related features. Example format:
+			// Initialize analysis service
+			const analysisService = new AnalysisService(
+				this.openai,
+				(funcName, args) => this._executeTool(funcName, args),
+				() => this._getAvailableTools(),
+				() => this._getDirectoryTreeAsText()
+			);
 
-graph TD
-    subgraph Feature1["Feature Name"]
-        direction TB
-        A[Component A]
-        B[Component B]
-    end
-    subgraph Feature2["Another Feature"]
-        direction TB
-        C[Component C]
-    end
-    Feature1 --> Feature2
+			// Perform analysis using the service
+			const result = await analysisService.performAnalysis(
+				(step) => this._sendAnalysisStep(webview, step),
+				webview
+			);
 
-Directory Tree:
-${treeText.substring(0, 3000)}
-
-${packageJsonContent ? `Package.json:\n${packageJsonContent.substring(0, 2000)}` : ''}
-
-Respond in JSON format:
-{
-  "description": "...",
-  "features": ["feature1", "feature2", ...],
-  "mermaid": "graph TD\n  ..."
-}`;
-
-					const response = await this.openai.chat.completions.create({
-						model: 'moonshotai/kimi-k2-thinking',
-						messages: [
-							{
-								role: 'system',
-								content: 'You are a codebase analysis assistant. Analyze codebases and provide structured summaries with feature-based mermaid diagrams. Create diagrams that show application features, pages, or main components grouped in subgraphs, NOT directory tree structures.'
-							},
-							{
-								role: 'user',
-								content: analysisPrompt
-							}
-						],
-						temperature: 0.7,
-						max_tokens: 2000
-					});
-
-					const content = response.choices[0].message.content;
-					
-					// Try to parse JSON from the response
-					try {
-						// Extract JSON from markdown code blocks if present
-						const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-						const jsonText = jsonMatch ? jsonMatch[1] : content;
-						const parsed = JSON.parse(jsonText.trim());
-						
-						analysisDescription = parsed.description || 'This is a codebase project.';
-						features = Array.isArray(parsed.features) ? parsed.features : [];
-						mermaidDiagram = parsed.mermaid || this._generateSimpleMermaid(treeText, features);
-					} catch (parseError) {
-						// Fallback: extract information from text response
-						analysisDescription = content.substring(0, 500);
-						features = this._extractFeaturesFromText(content);
-						mermaidDiagram = this._generateSimpleMermaid(treeText, features);
-					}
-				} catch (openaiError) {
-					console.error('OpenAI analysis error:', openaiError);
-					// Fallback analysis
-					analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
-					features = this._extractFeaturesFromPackageJson(packageJsonContent);
-					mermaidDiagram = this._generateSimpleMermaid(treeText, features);
-				}
-			} else {
-				// Fallback when OpenAI is not available
-				analysisDescription = this._generateFallbackDescription(treeText, packageJsonContent);
-				features = this._extractFeaturesFromPackageJson(packageJsonContent);
-				mermaidDiagram = this._generateSimpleMermaid(treeText, features);
-			}
-			
 			// Send final result
 			webview.postMessage({
 				command: 'analysisComplete',
-				description: analysisDescription,
-				features: features,
-				mermaid: mermaidDiagram
+				markdown: result.markdown,
+				features: result.features
 			});
 		} catch (error) {
 			console.error('Analysis error:', error);
@@ -285,150 +183,6 @@ Respond in JSON format:
 		});
 	}
 
-	_delay(ms) {
-		return new Promise(resolve => setTimeout(resolve, ms));
-	}
-
-	_generateFallbackDescription(treeText, packageJsonContent) {
-		let description = 'This is a codebase project.';
-		
-		if (packageJsonContent) {
-			try {
-				const pkg = JSON.parse(packageJsonContent);
-				if (pkg.name) {
-					description = `This is a ${pkg.name} project.`;
-				}
-				if (pkg.description) {
-					description += ` ${pkg.description}`;
-				}
-			} catch (e) {
-				// Ignore parse errors
-			}
-		}
-		
-		// Detect framework from tree structure
-		if (treeText.includes('node_modules')) {
-			description += ' It uses Node.js and npm dependencies.';
-		}
-		if (treeText.includes('src/') || treeText.includes('components/')) {
-			description += ' The project has a structured source code organization.';
-		}
-		
-		return description;
-	}
-
-	_extractFeaturesFromPackageJson(packageJsonContent) {
-		const features = [];
-		if (!packageJsonContent) return features;
-		
-		try {
-			const pkg = JSON.parse(packageJsonContent);
-			const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-			
-			// Detect common features
-			if (deps['react'] || deps['@react']) features.push('React');
-			if (deps['vue']) features.push('Vue.js');
-			if (deps['express']) features.push('Express.js');
-			if (deps['next']) features.push('Next.js');
-			if (deps['typescript']) features.push('TypeScript');
-			if (deps['tailwindcss']) features.push('Tailwind CSS');
-			if (deps['@supabase/supabase-js']) features.push('Supabase');
-			if (deps['mongodb'] || deps['mongoose']) features.push('MongoDB');
-			if (deps['pg'] || deps['postgresql']) features.push('PostgreSQL');
-		} catch (e) {
-			// Ignore parse errors
-		}
-		
-		return features;
-	}
-
-	_extractFeaturesFromText(text) {
-		const features = [];
-		const lowerText = text.toLowerCase();
-		
-		// Simple keyword detection
-		if (lowerText.includes('react')) features.push('React');
-		if (lowerText.includes('vue')) features.push('Vue.js');
-		if (lowerText.includes('express')) features.push('Express.js');
-		if (lowerText.includes('next')) features.push('Next.js');
-		if (lowerText.includes('typescript')) features.push('TypeScript');
-		
-		return features;
-	}
-
-	_generateSimpleMermaid(treeText, features = []) {
-		// Generate a feature-based mermaid diagram
-		let mermaid = 'graph TD\n';
-		
-		// If we have features, use them to create feature-based subgraphs
-		if (features && features.length > 0) {
-			const featureGroups = features.slice(0, 5); // Limit to 5 features
-			
-			featureGroups.forEach((feature, idx) => {
-				const featureId = `Feature${idx}`;
-				const featureName = feature.length > 30 ? feature.substring(0, 30) : feature;
-				mermaid += `\n    subgraph ${featureId}["${featureName}"]\n`;
-				mermaid += `        direction TB\n`;
-				mermaid += `        ${featureId}_A[${featureName} Component]\n`;
-				mermaid += `    end\n`;
-			});
-			
-			// Add connections between features
-			for (let i = 0; i < featureGroups.length - 1; i++) {
-				mermaid += `    Feature${i} --> Feature${i + 1}\n`;
-			}
-		} else {
-			// Fallback: try to infer features from directory structure
-			const lines = treeText.split('\n').filter(line => line.trim());
-			const potentialFeatures = [];
-			
-			// Look for common feature indicators in directory names
-			for (const line of lines) {
-				if (line.includes('📁')) {
-					const match = line.match(/[├└│─\s]*📁\s*(.+)/);
-					if (match) {
-						const dirName = match[1].trim().toLowerCase();
-						// Common feature patterns
-						if (dirName.includes('auth') || dirName.includes('login') || dirName.includes('user')) {
-							if (!potentialFeatures.includes('Authentication')) potentialFeatures.push('Authentication');
-						}
-						if (dirName.includes('api') || dirName.includes('route')) {
-							if (!potentialFeatures.includes('API')) potentialFeatures.push('API');
-						}
-						if (dirName.includes('page') || dirName.includes('view') || dirName.includes('component')) {
-							if (!potentialFeatures.includes('UI Components')) potentialFeatures.push('UI Components');
-						}
-						if (dirName.includes('db') || dirName.includes('database') || dirName.includes('model')) {
-							if (!potentialFeatures.includes('Database')) potentialFeatures.push('Database');
-						}
-					}
-				}
-			}
-			
-			if (potentialFeatures.length > 0) {
-				potentialFeatures.slice(0, 4).forEach((feature, idx) => {
-					const featureId = `Feature${idx}`;
-					mermaid += `\n    subgraph ${featureId}["${feature}"]\n`;
-					mermaid += `        direction TB\n`;
-					mermaid += `        ${featureId}_A[${feature} Module]\n`;
-					mermaid += `    end\n`;
-				});
-				
-				// Add connections
-				for (let i = 0; i < potentialFeatures.length - 1 && i < 3; i++) {
-					mermaid += `    Feature${i} --> Feature${i + 1}\n`;
-				}
-			} else {
-				// Ultimate fallback: generic structure
-				mermaid += `    subgraph App["Application"]\n`;
-				mermaid += `        direction TB\n`;
-				mermaid += `        A[Main Module]\n`;
-				mermaid += `    end\n`;
-			}
-		}
-		
-		return mermaid;
-	}
 
 	async _handleMessage(text) {
 		// Check if user is asking for directory tree (direct command)
@@ -654,7 +408,7 @@ Respond in JSON format:
 			const messages = [
 				{
 					role: 'system',
-					content: 'You are a helpful coding assistant in VS Code. You help developers learn and solve coding problems. You have access to tools that let you analyze the codebase structure. Use tools when needed to understand the project better. Be concise, clear, and helpful.'
+					content: prompts.getConversationSystemMessage()
 				},
 				...this.conversationHistory
 			];
