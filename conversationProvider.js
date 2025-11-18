@@ -684,6 +684,11 @@ class ConversationProvider {
 				const fullPath = path.join(dirPath, entry.name);
 				const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
 
+				// Always ignore the cache file to prevent it from affecting the hash
+				if (entry.name === '.kth-analysis-cache.json') {
+					continue;
+				}
+
 				// Check if this entry should be ignored
 				if (this._shouldIgnore(fullPath, relPath, gitignorePatterns)) {
 					continue;

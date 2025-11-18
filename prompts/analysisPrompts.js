@@ -12,7 +12,7 @@ module.exports = {
 	getMinimaxAnalysisPrompt(treeText, packageJsonContent) {
 		return `You are analyzing a codebase. Your task is to:
 1. Read and understand the project structure
-2. Identify key files and their purposes
+2. Identify key files and their purposes (use tools to read important files)
 3. Detect technologies, frameworks, and features
 4. Create a detailed structured analysis
 
@@ -21,34 +21,51 @@ ${treeText.substring(0, 4000)}
 
 ${packageJsonContent ? `Package.json:\n${packageJsonContent.substring(0, 3000)}` : ''}
 
-Please provide a detailed structured analysis in JSON format:
+IMPORTANT: After reading any files with tools, you MUST provide a complete detailed structured analysis in JSON format. Do not just say you will read files - actually provide the analysis.
+
+The final response MUST be in this JSON format:
 {
   "description": "A detailed 2-3 sentence description of what this project is",
   "features": ["feature1", "feature2", ...],
   "keyFiles": ["file1", "file2", ...],
   "technologies": ["tech1", "tech2", ...],
   "architecture": "Brief description of architecture patterns",
-  "mainComponents": ["component1", "component2", ...]
-}`;
+  "mainComponents": ["component1", "component2", ...],
+  "fileContents": {
+    "file1": "summary of what this file does",
+    "file2": "summary of what this file does"
+  }
+}
+
+Provide the complete JSON analysis now.`;
 	},
 
 	/**
 	 * System message for minimax analysis
 	 */
 	getMinimaxSystemMessage() {
-		return 'You are a codebase analysis assistant. Analyze codebases thoroughly and provide detailed structured analysis. Use tools to read files when needed.';
+		return 'You are a codebase analysis assistant. Analyze codebases thoroughly and provide detailed structured analysis. Use tools to read files when needed. After reading files with tools, you MUST provide a complete JSON analysis with all the information you gathered. Do not stop after reading files - always provide the final structured JSON analysis.';
 	},
 
 	/**
 	 * Prompt for Stage 2: Polish and generate mermaid with moonshotai/kimi-k2-thinking
 	 * This model takes the detailed analysis and creates polished output with mermaid diagrams
 	 */
-	getMoonshotPolishPrompt(detailedAnalysis, features) {
-		return `Based on this detailed codebase analysis, create a polished markdown response that includes:
+	getMoonshotPolishPrompt(detailedAnalysis, features, treeText, packageJsonContent) {
+		// Ensure detailedAnalysis is not empty
+		if (!detailedAnalysis || detailedAnalysis.trim().length === 0) {
+			detailedAnalysis = 'No detailed analysis available from Stage 1. Please analyze the codebase structure from the directory tree and package.json provided below.';
+		}
+		
+		// Build the prompt with all available information
+		let prompt = `You are analyzing a codebase. Below is information about the codebase structure, files, and dependencies.
+
+YOUR TASK: Create a polished markdown response based on this information that includes:
 1. A polished, concise description (2-3 sentences) of what type of project this is
 2. A feature-based mermaid diagram showing the application's features, pages, or main components and their relationships. Use subgraphs to group related features.
 
 IMPORTANT: 
+- You MUST analyze the codebase using the information provided below
 - Create a FEATURE-BASED diagram (NOT a directory tree). Show how features/pages/components relate to each other.
 - Respond in MARKDOWN format (not JSON)
 - Include the mermaid diagram in a markdown code block with language "mermaid"
@@ -74,7 +91,7 @@ graph TD
 Example markdown structure:
 # Project Analysis
 
-[Your polished description here]
+[Your polished description here based on the information below]
 
 ## Features
 
@@ -87,12 +104,44 @@ Example markdown structure:
 [Your mermaid diagram here]
 \`\`\`
 
-Detailed Analysis:
+=== DETAILED CODEBASE ANALYSIS FROM STAGE 1 ===
+
 ${detailedAnalysis}
 
-${features.length > 0 ? `Detected Features: ${features.join(', ')}` : ''}
+=== END OF STAGE 1 ANALYSIS ===`;
 
-Respond in MARKDOWN format (not JSON).`;
+		// Add directory tree if available
+		if (treeText && treeText.trim().length > 0) {
+			prompt += `\n\n=== DIRECTORY TREE STRUCTURE ===\n\n${treeText.substring(0, 3000)}\n\n=== END OF DIRECTORY TREE ===`;
+		}
+
+		// Add package.json if available
+		if (packageJsonContent && packageJsonContent.trim().length > 0) {
+			prompt += `\n\n=== PACKAGE.JSON ===\n\n${packageJsonContent.substring(0, 2000)}\n\n=== END OF PACKAGE.JSON ===`;
+		}
+
+		// Add features if available
+		if (features && features.length > 0) {
+			prompt += `\n\nDetected Features: ${features.join(', ')}`;
+		}
+
+		// Try to extract file contents from detailedAnalysis if it's JSON
+		try {
+			const analysisObj = JSON.parse(detailedAnalysis);
+			if (analysisObj.fileContents && Object.keys(analysisObj.fileContents).length > 0) {
+				prompt += `\n\n=== KEY FILES READ DURING ANALYSIS ===\n\n`;
+				for (const [filePath, content] of Object.entries(analysisObj.fileContents)) {
+					prompt += `\nFile: ${filePath}\n${content.substring(0, 1500)}\n`;
+				}
+				prompt += `\n=== END OF KEY FILES ===`;
+			}
+		} catch (e) {
+			// Not JSON, skip file contents extraction
+		}
+
+		prompt += `\n\nNow create your polished markdown response based on ALL the information above. Analyze the codebase structure, dependencies, files read, and create a feature-based diagram. Respond in MARKDOWN format (not JSON).`;
+
+		return prompt;
 	},
 
 	/**
