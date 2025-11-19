@@ -24,56 +24,81 @@ class AnalysisService {
 	}
 
 	/**
-	 * Stage 1: Fast analysis with minimax/minimax-m2
+	 * Stage 1: Fast analysis
 	 * Reads files and creates detailed structured analysis
 	 */
 	async performStage1Analysis(treeText, packageJsonContent) {
-		const analysisPrompt = prompts.getMinimaxAnalysisPrompt(treeText, packageJsonContent);
-		const systemMessage = prompts.getMinimaxSystemMessage();
+		const analysisPrompt = prompts.getStage1AnalysisPrompt(treeText, packageJsonContent);
+		const systemMessage = prompts.getStage1SystemMessage();
+		
+		const availableTools = this.getAvailableTools();
+		console.log('=== STAGE 1 API CALL ===');
+		console.log('OpenAI client available:', !!this.openai);
+		console.log('Available tools:', JSON.stringify(availableTools, null, 2));
+		console.log('Tool count:', availableTools ? availableTools.length : 0);
+		console.log('Model: xai/grok-4-fast-non-reasoning');
+		console.log('Prompt length:', analysisPrompt.length);
+		console.log('System message length:', systemMessage.length);
+		console.log('========================');
 
-		const minimaxResponse = await this.openai.chat.completions.create({
-			model: 'minimax/minimax-m2',
-			messages: [
-				{
-					role: 'system',
-					content: systemMessage
-				},
-				{
-					role: 'user',
-					content: analysisPrompt
-				}
-			],
-			tools: this.getAvailableTools(),
-			tool_choice: 'auto',
-			temperature: 0.7,
-			max_tokens: 4000
-		});
+		if (!this.openai) {
+			throw new Error('OpenAI client is not initialized');
+		}
 
-		// Process minimax response with tool calls if any
-		let minimaxContent = minimaxResponse.choices[0].message.content || '';
-		const toolCalls = minimaxResponse.choices[0].message.tool_calls || [];
+		let stage1Response;
+		try {
+			stage1Response = await this.openai.chat.completions.create({
+				model: 'xai/grok-4-fast-non-reasoning',
+				messages: [
+					{
+						role: 'system',
+						content: systemMessage
+					},
+					{
+						role: 'user',
+						content: analysisPrompt
+					}
+				],
+				tools: availableTools,
+				tool_choice: 'auto',
+				temperature: 0.7,
+				max_tokens: 4000
+			});
+			console.log('API call completed successfully');
+		} catch (apiError) {
+			console.error('=== API CALL ERROR ===');
+			console.error('Error:', apiError);
+			console.error('Error message:', apiError.message);
+			console.error('Error response:', apiError.response ? JSON.stringify(apiError.response, null, 2) : 'No response');
+			console.error('=====================');
+			throw apiError;
+		}
+
+		// Process Stage 1 response with tool calls if any
+		let stage1Content = stage1Response.choices[0].message.content || '';
+		const toolCalls = stage1Response.choices[0].message.tool_calls || [];
 		
 		// Fallback: Use reasoning content if main content is empty (some models provide reasoning)
-		if (!minimaxContent || minimaxContent.trim().length === 0) {
-			const reasoning = minimaxResponse.choices[0].message.reasoning;
+		if (!stage1Content || stage1Content.trim().length === 0) {
+			const reasoning = stage1Response.choices[0].message.reasoning;
 			if (reasoning && reasoning.trim().length > 0) {
 				console.log('Using reasoning content as fallback');
-				minimaxContent = reasoning;
+				stage1Content = reasoning;
 			}
 		}
 		
-		// Debug: Print raw minimax response
-		console.log('=== MINIMAX RAW RESPONSE ===');
-		console.log('Full response object:', JSON.stringify(minimaxResponse, null, 2));
-		console.log('Content:', minimaxContent);
-		console.log('Content length:', minimaxContent ? minimaxContent.length : 0);
+		// Debug: Print raw Stage 1 response
+		console.log('=== STAGE 1 RAW RESPONSE ===');
+		console.log('Full response object:', JSON.stringify(stage1Response, null, 2));
+		console.log('Content:', stage1Content);
+		console.log('Content length:', stage1Content ? stage1Content.length : 0);
 		console.log('Tool calls:', toolCalls.length > 0 ? JSON.stringify(toolCalls, null, 2) : 'None');
 		console.log('===========================');
 		
 		// Track all file contents read during analysis
 		const fileContentsMap = {};
 		
-		// Execute tool calls if minimax wants to read files
+		// Execute tool calls if Stage 1 wants to read files
 		if (toolCalls.length > 0) {
 			const toolResults = [];
 			for (const toolCall of toolCalls) {
@@ -117,7 +142,7 @@ class AnalysisService {
 				},
 				{
 					role: 'assistant',
-					content: minimaxContent,
+					content: stage1Content,
 					tool_calls: toolCalls
 				},
 				...toolResults
@@ -125,7 +150,7 @@ class AnalysisService {
 
 			while (iteration < maxToolCallIterations) {
 				const finalResponse = await this.openai.chat.completions.create({
-					model: 'minimax/minimax-m2',
+					model: 'xai/grok-4-fast-non-reasoning',
 					messages: currentMessages,
 					tools: this.getAvailableTools(),
 					tool_choice: 'auto',
@@ -215,7 +240,7 @@ class AnalysisService {
 						}
 						
 						// We have substantial content or JSON - use it
-						minimaxContent = responseContent;
+						stage1Content = responseContent;
 						break;
 					} else {
 						// No content and no tool calls - break
@@ -224,26 +249,26 @@ class AnalysisService {
 				}
 			}
 			
-			// Debug: Print final minimax response after tool calls
-			console.log('=== MINIMAX FINAL RESPONSE (after tool calls) ===');
-			console.log('Content:', minimaxContent);
-			console.log('Content length:', minimaxContent ? minimaxContent.length : 0);
+			// Debug: Print final Stage 1 response after tool calls
+			console.log('=== STAGE 1 FINAL RESPONSE (after tool calls) ===');
+			console.log('Content:', stage1Content);
+			console.log('Content length:', stage1Content ? stage1Content.length : 0);
 			console.log('===============================================');
 		}
 		
-		// Parse minimax response
-		console.log('=== PARSING MINIMAX RESPONSE ===');
-		console.log('Raw content length:', minimaxContent ? minimaxContent.length : 0);
-		console.log('Raw content:', minimaxContent);
+		// Parse Stage 1 response
+		console.log('=== PARSING STAGE 1 RESPONSE ===');
+		console.log('Raw content length:', stage1Content ? stage1Content.length : 0);
+		console.log('Raw content:', stage1Content);
 		
 		let jsonText = '';
 		let detailedAnalysis = '';
 		let features = [];
 		
 		// If content is empty, we can't parse it
-		if (!minimaxContent || minimaxContent.trim().length === 0) {
-			console.error('=== MINIMAX CONTENT IS EMPTY ===');
-			console.error('Minimax did not return any content. This might be a model issue.');
+		if (!stage1Content || stage1Content.trim().length === 0) {
+			console.error('=== STAGE 1 CONTENT IS EMPTY ===');
+			console.error('Stage 1 did not return any content. This might be a model issue.');
 			console.error('===========================');
 			
 			// Return empty analysis - will trigger fallback
@@ -251,8 +276,8 @@ class AnalysisService {
 		}
 		
 		try {
-			const jsonMatch = minimaxContent.match(/```json\s*([\s\S]*?)\s*```/) || minimaxContent.match(/```\s*([\s\S]*?)\s*```/);
-			jsonText = jsonMatch ? jsonMatch[1] : minimaxContent;
+			const jsonMatch = stage1Content.match(/```json\s*([\s\S]*?)\s*```/) || stage1Content.match(/```\s*([\s\S]*?)\s*```/);
+			jsonText = jsonMatch ? jsonMatch[1] : stage1Content;
 			
 			console.log('Extracted JSON text:', jsonText);
 			console.log('JSON text length:', jsonText.length);
@@ -267,27 +292,27 @@ class AnalysisService {
 			console.log('Extracted features:', features);
 			console.log('===================================');
 		} catch (parseError) {
-			console.error('=== MINIMAX PARSE ERROR ===');
+			console.error('=== STAGE 1 PARSE ERROR ===');
 			console.error('Error:', parseError.message);
 			console.error('Stack:', parseError.stack);
-			console.error('Attempted to parse:', jsonText || minimaxContent);
+			console.error('Attempted to parse:', jsonText || stage1Content);
 			console.error('===========================');
 			
 			// Fallback: Try to extract structured info from text
 			// If it's reasoning text, try to parse it as structured content
-			detailedAnalysis = minimaxContent;
-			features = fileUtils.extractFeaturesFromText(minimaxContent);
+			detailedAnalysis = stage1Content;
+			features = fileUtils.extractFeaturesFromText(stage1Content);
 			
 			// Try to create a structured object from the text
 			try {
 				// Look for structured patterns in the text
-				const descriptionMatch = minimaxContent.match(/(?:description|project|application)[:\s]+([^\n]+)/i);
-				const featuresMatch = minimaxContent.match(/(?:features?|technologies?)[:\s]+([^\n]+)/gi);
+				const descriptionMatch = stage1Content.match(/(?:description|project|application)[:\s]+([^\n]+)/i);
+				const featuresMatch = stage1Content.match(/(?:features?|technologies?)[:\s]+([^\n]+)/gi);
 				
 				if (descriptionMatch || featuresMatch || features.length > 0) {
 					const structured = {
-						description: descriptionMatch ? descriptionMatch[1] : minimaxContent.substring(0, 200),
-						features: features.length > 0 ? features : fileUtils.extractFeaturesFromText(minimaxContent),
+						description: descriptionMatch ? descriptionMatch[1] : stage1Content.substring(0, 200),
+						features: features.length > 0 ? features : fileUtils.extractFeaturesFromText(stage1Content),
 						note: 'Parsed from text response (not JSON)'
 					};
 					detailedAnalysis = JSON.stringify(structured, null, 2);
@@ -295,7 +320,7 @@ class AnalysisService {
 				}
 			} catch (e) {
 				// If all else fails, just use the raw content
-				console.log('Using raw minimax content as analysis');
+				console.log('Using raw Stage 1 content as analysis');
 			}
 		}
 
@@ -303,12 +328,12 @@ class AnalysisService {
 	}
 
 	/**
-	 * Stage 2: Polish and generate mermaid with moonshotai/kimi-k2-thinking
+	 * Stage 2: Polish and generate mermaid
 	 * Takes detailed analysis and creates polished output with mermaid diagrams
 	 */
 	async performStage2Polishing(detailedAnalysis, features, treeText, packageJsonContent) {
-		// Debug: Log what we're sending to moonshot
-		console.log('=== PREPARING MOONSHOT PROMPT ===');
+		// Debug: Log what we're sending to Stage 2
+		console.log('=== PREPARING STAGE 2 PROMPT ===');
 		console.log('Detailed analysis length:', detailedAnalysis ? detailedAnalysis.length : 0);
 		console.log('Detailed analysis preview:', detailedAnalysis ? detailedAnalysis.substring(0, 500) : 'EMPTY');
 		console.log('Features:', features);
@@ -316,18 +341,18 @@ class AnalysisService {
 		console.log('Package.json length:', packageJsonContent ? packageJsonContent.length : 0);
 		console.log('==================================');
 		
-		const polishPrompt = prompts.getMoonshotPolishPrompt(detailedAnalysis, features, treeText, packageJsonContent);
+		const polishPrompt = prompts.getStage2PolishPrompt(detailedAnalysis, features, treeText, packageJsonContent);
 		
 		// Debug: Log the full prompt being sent
-		console.log('=== MOONSHOT PROMPT (first 2000 chars) ===');
+		console.log('=== STAGE 2 PROMPT (first 2000 chars) ===');
 		console.log(polishPrompt.substring(0, 2000));
 		console.log('Full prompt length:', polishPrompt.length);
 		console.log('==========================================');
 		
-		const systemMessage = prompts.getMoonshotSystemMessage();
+		const systemMessage = prompts.getStage2SystemMessage();
 
-		const moonshotResponse = await this.openai.chat.completions.create({
-			model: 'moonshotai/kimi-k2-thinking',
+		const stage2Response = await this.openai.chat.completions.create({
+			model: 'xai/grok-4-fast-non-reasoning',
 			messages: [
 				{
 					role: 'system',
@@ -342,20 +367,20 @@ class AnalysisService {
 			max_tokens: 10000
 		});
 
-		const moonshotContent = moonshotResponse.choices[0].message.content;
+		const stage2Content = stage2Response.choices[0].message.content;
 		
-		// Debug: Print raw moonshot response
-		console.log('=== MOONSHOT RAW RESPONSE ===');
-		console.log('Full response object:', JSON.stringify(moonshotResponse, null, 2));
-		console.log('Content:', moonshotContent);
-		console.log('Content length:', moonshotContent.length);
+		// Debug: Print raw Stage 2 response
+		console.log('=== STAGE 2 RAW RESPONSE ===');
+		console.log('Full response object:', JSON.stringify(stage2Response, null, 2));
+		console.log('Content:', stage2Content);
+		console.log('Content length:', stage2Content.length);
 		console.log('=============================');
 		
 		// Process markdown response
-		console.log('=== PROCESSING MOONSHOT MARKDOWN RESPONSE ===');
+		console.log('=== PROCESSING STAGE 2 MARKDOWN RESPONSE ===');
 		
 		// Clean up the markdown content (remove any extra formatting if needed)
-		let markdownContent = moonshotContent.trim();
+		let markdownContent = stage2Content.trim();
 		
 		// Extract mermaid diagram if it's in a code block (for fallback purposes)
 		let extractedMermaid = '';
@@ -401,7 +426,7 @@ class AnalysisService {
 			console.log('Generated codebase hash:', codebaseHash);
 			console.log('Tree text length:', treeText.length);
 			
-			// Check cache first for minimax analysis (Stage 1)
+			// Check cache first for Stage 1 analysis
 			sendAnalysisStep('Checking for cached analysis...');
 			await this.delay(500);
 			
@@ -410,19 +435,19 @@ class AnalysisService {
 			let features = [];
 			
 			if (cachedResult) {
-				console.log('✓ Cache found and valid - SKIPPING Stage 1 (minimax)');
-				console.log('Using cached minimax analysis result');
+				console.log('✓ Cache found and valid - SKIPPING Stage 1');
+				console.log('Using cached Stage 1 analysis result');
 				sendAnalysisStep('Loading cached analysis...');
 				await this.delay(500);
 				
-				// Use cached minimax results
+				// Use cached Stage 1 results
 				detailedAnalysis = cachedResult.detailedAnalysis;
 				features = cachedResult.features;
 				
 				// Include file contents in detailedAnalysis if available
 				if (cachedResult.fileContents && Object.keys(cachedResult.fileContents).length > 0) {
 					console.log(`Cache includes ${Object.keys(cachedResult.fileContents).length} file(s) that were read`);
-					// Append file contents to detailedAnalysis for moonshot
+					// Append file contents to detailedAnalysis for Stage 2
 					try {
 						const analysisObj = JSON.parse(detailedAnalysis);
 						analysisObj.fileContents = cachedResult.fileContents;
@@ -436,49 +461,62 @@ class AnalysisService {
 					}
 				}
 			} else {
-				console.log('✗ No valid cache found - RUNNING Stage 1 (minimax)');
-				console.log('This will call minimax API to analyze the codebase');
+				console.log('✗ No valid cache found - RUNNING Stage 1');
+				console.log('This will call Stage 1 API to analyze the codebase');
 			
-				// Step 2: Reading key files with minimax
+				// Step 2: Reading key files with Stage 1
 				sendAnalysisStep('Reading and analyzing key project files...');
 				await this.delay(1000);
 				
 				// Read package.json if it exists
 				const packageJsonContent = fileUtils.readPackageJson();
 				
-				// Step 3: Detailed analysis with minimax (fast model)
+				// Step 3: Detailed analysis with Stage 1
 				sendAnalysisStep('Performing detailed codebase analysis...');
 				
 				if (this.openai) {
+					console.log('OpenAI client is available, calling Stage 1 analysis...');
 					try {
 						const result = await this.performStage1Analysis(treeText, packageJsonContent);
+						console.log('Stage 1 analysis completed successfully');
+						console.log('Result:', {
+							hasDetailedAnalysis: !!result.detailedAnalysis,
+							detailedAnalysisLength: result.detailedAnalysis ? result.detailedAnalysis.length : 0,
+							featuresCount: result.features ? result.features.length : 0,
+							fileContentsCount: result.fileContents ? Object.keys(result.fileContents).length : 0
+						});
 						detailedAnalysis = result.detailedAnalysis;
 						features = result.features;
 						const fileContents = result.fileContents || {};
 						
-						// Save minimax analysis to cache (Stage 1 result) - includes file contents
+						// Save Stage 1 analysis to cache - includes file contents
 						if (detailedAnalysis && detailedAnalysis.trim().length > 0) {
 							sendAnalysisStep('Saving analysis to cache...');
 							analysisCache.saveCache(codebaseHash, detailedAnalysis, features, fileContents);
 							await this.delay(500);
 						}
-					} catch (minimaxError) {
-						console.error('Minimax analysis error:', minimaxError);
+					} catch (stage1Error) {
+						console.error('=== STAGE 1 ANALYSIS ERROR ===');
+						console.error('Error:', stage1Error);
+						console.error('Error message:', stage1Error.message);
+						console.error('Error stack:', stage1Error.stack);
+						console.error('================================');
 						// Fallback
 						detailedAnalysis = fileUtils.generateFallbackDescription(treeText, packageJsonContent);
 						features = fileUtils.extractFeaturesFromPackageJson(packageJsonContent);
 					}
 				} else {
+					console.warn('OpenAI client is NOT available - using fallback');
 					// Fallback when OpenAI is not available
 					detailedAnalysis = fileUtils.generateFallbackDescription(treeText, packageJsonContent);
 					features = fileUtils.extractFeaturesFromPackageJson(packageJsonContent);
 				}
 			}
 			
-			// Read package.json for Stage 2 (needed for moonshot prompt)
+			// Read package.json for Stage 2
 			const packageJsonContent = fileUtils.readPackageJson();
 			
-			// Stage 2: Polish and generate mermaid with moonshotai/kimi-k2-thinking
+			// Stage 2: Polish and generate mermaid
 			sendAnalysisStep('Polishing analysis and generating feature diagram...');
 			
 			// Validate detailedAnalysis before passing to Stage 2
@@ -504,8 +542,8 @@ class AnalysisService {
 				try {
 					const result = await this.performStage2Polishing(detailedAnalysis, features, treeText, packageJsonContent);
 					markdownContent = result.markdownContent;
-				} catch (moonshotError) {
-					console.error('Moonshot polishing error:', moonshotError);
+				} catch (stage2Error) {
+					console.error('Stage 2 polishing error:', stage2Error);
 					// Fallback: create simple markdown with fallback description and mermaid
 					const fallbackDesc = detailedAnalysis.substring(0, 500);
 					const fallbackMermaid = mermaidGenerator.generateSimpleMermaid(treeText, features);
@@ -518,8 +556,8 @@ class AnalysisService {
 				markdownContent = `${fallbackDesc}\n\n## Architecture Diagram\n\n\`\`\`mermaid\n${fallbackMermaid}\n\`\`\``;
 			}
 			
-			// Note: Cache is already saved after Stage 1 (minimax analysis)
-			// We don't save moonshot's markdown to cache - we only cache minimax's detailedAnalysis
+			// Note: Cache is already saved after Stage 1 analysis
+			// We don't save Stage 2's markdown to cache - we only cache Stage 1's detailedAnalysis
 			
 			// Debug: Print final result
 			console.log('=== FINAL ANALYSIS RESULT ===');

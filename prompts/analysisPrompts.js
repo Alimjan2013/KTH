@@ -6,24 +6,33 @@
 
 module.exports = {
 	/**
-	 * Prompt for Stage 1: Detailed analysis with minimax/minimax-m2
-	 * This model reads files and creates a detailed structured analysis
+	 * Prompt for Stage 1: Detailed analysis
+	 * This stage reads files and creates a detailed structured analysis
 	 */
-	getMinimaxAnalysisPrompt(treeText, packageJsonContent) {
-		return `You are analyzing a codebase. Your task is to:
-1. Read and understand the project structure
-2. Identify key files and their purposes (use tools to read important files)
-3. Detect technologies, frameworks, and features
-4. Create a detailed structured analysis
+	getStage1AnalysisPrompt(treeText, packageJsonContent) {
+		return `You are analyzing a codebase. Follow these steps EXACTLY:
+
+STEP 1: USE TOOLS TO READ FILES
+- You MUST use the read_file_content tool to read at least 3-5 key files from the codebase
+- Look at the directory tree below and identify important files (e.g., main entry points, config files, component files, API routes)
+- Use the read_file_content tool for each important file you identify
+- DO NOT skip this step - you cannot provide accurate analysis without reading the actual code
+
+STEP 2: ANALYZE WHAT YOU READ
+- After reading files with tools, analyze the code structure, patterns, and functionality
+- Identify technologies, frameworks, features, and architecture patterns
+
+STEP 3: PROVIDE JSON ANALYSIS
+- After reading files, provide a complete detailed structured analysis in JSON format
 
 Directory Tree:
 ${treeText.substring(0, 4000)}
 
 ${packageJsonContent ? `Package.json:\n${packageJsonContent.substring(0, 3000)}` : ''}
 
-IMPORTANT: After reading any files with tools, you MUST provide a complete detailed structured analysis in JSON format. Do not just say you will read files - actually provide the analysis.
+CRITICAL: You MUST use the read_file_content tool FIRST before providing any analysis. Start by calling the tool to read key files from the directory tree above.
 
-The final response MUST be in this JSON format:
+After reading files, your final response MUST be in this JSON format:
 {
   "description": "A detailed 2-3 sentence description of what this project is",
   "features": ["feature1", "feature2", ...],
@@ -37,21 +46,21 @@ The final response MUST be in this JSON format:
   }
 }
 
-Provide the complete JSON analysis now.`;
+Remember: Use tools FIRST, then provide the JSON analysis.`;
 	},
 
 	/**
-	 * System message for minimax analysis
+	 * System message for Stage 1 analysis
 	 */
-	getMinimaxSystemMessage() {
-		return 'You are a codebase analysis assistant. Analyze codebases thoroughly and provide detailed structured analysis. Use tools to read files when needed. After reading files with tools, you MUST provide a complete JSON analysis with all the information you gathered. Do not stop after reading files - always provide the final structured JSON analysis.';
+	getStage1SystemMessage() {
+		return 'You are a codebase analysis assistant. You MUST use the read_file_content tool to read actual code files before providing analysis. Do not provide analysis based only on file names - you must read the file contents using tools first. After reading files with tools, always provide a complete JSON analysis with all the information you gathered.';
 	},
 
 	/**
-	 * Prompt for Stage 2: Polish and generate mermaid with moonshotai/kimi-k2-thinking
-	 * This model takes the detailed analysis and creates polished output with mermaid diagrams
+	 * Prompt for Stage 2: Polish and generate mermaid
+	 * This stage takes the detailed analysis and creates polished output with mermaid diagrams
 	 */
-	getMoonshotPolishPrompt(detailedAnalysis, features, treeText, packageJsonContent) {
+	getStage2PolishPrompt(detailedAnalysis, features, treeText, packageJsonContent) {
 		// Ensure detailedAnalysis is not empty
 		if (!detailedAnalysis || detailedAnalysis.trim().length === 0) {
 			detailedAnalysis = 'No detailed analysis available from Stage 1. Please analyze the codebase structure from the directory tree and package.json provided below.';
@@ -62,30 +71,36 @@ Provide the complete JSON analysis now.`;
 
 YOUR TASK: Create a polished markdown response based on this information that includes:
 1. A polished, concise description (2-3 sentences) of what type of project this is
-2. A feature-based mermaid diagram showing the application's features, pages, or main components and their relationships. Use subgraphs to group related features.
+2. A SIMPLE feature-based mermaid diagram showing the main features or pages
 
 IMPORTANT: 
 - You MUST analyze the codebase using the information provided below
-- Create a FEATURE-BASED diagram (NOT a directory tree). Show how features/pages/components relate to each other.
+- Create a FEATURE-BASED diagram (NOT a directory tree). Show main features or pages.
 - Respond in MARKDOWN format (not JSON)
 - Include the mermaid diagram in a markdown code block with language "mermaid"
 - Use proper markdown formatting for headings, lists, etc.
+- KEEP THE MERMAID DIAGRAM SIMPLE - use basic syntax only, avoid complex features
 
-Example mermaid format:
+MERMAID RULES (CRITICAL - FOLLOW THESE EXACTLY):
+- Use simple graph syntax: graph TD or graph LR
+- Use simple node labels: A[Label] or B[Feature Name]
+- Use simple connections: A --> B
+- NO special characters in labels (no quotes, no brackets inside brackets, no line breaks)
+- NO subgraphs with direction
+- NO complex styling
+- Keep node IDs simple (single letters or simple words)
+- Maximum 10-15 nodes total
+
+Example mermaid format (SIMPLE):
 \`\`\`mermaid
 graph TD
-    subgraph HomePage["Home page"]
-        direction TB
-        B[Menu bar]
-        C[Carousel]
-        D[Selective Albums]
-    end
-    subgraph AlbumPage["Album page"]
-        direction TB
-        F[Image preview]
-        G[Image description]
-    end
-    HomePage --> AlbumPage
+    A[Home Page]
+    B[Albums Page]
+    C[Admin Page]
+    D[Image Gallery]
+    A --> B
+    B --> D
+    C --> D
 \`\`\`
 
 Example markdown structure:
@@ -145,10 +160,10 @@ ${detailedAnalysis}
 	},
 
 	/**
-	 * System message for moonshot polishing
+	 * System message for Stage 2 polishing
 	 */
-	getMoonshotSystemMessage() {
-		return 'You are an expert at creating polished codebase summaries and feature-based mermaid diagrams. Create well-formatted markdown responses with mermaid diagrams that show application features, pages, or main components grouped in subgraphs with their relationships. DO NOT create directory tree structures. Always format mermaid diagrams in markdown code blocks with language "mermaid".';
+	getStage2SystemMessage() {
+		return 'You are an expert at creating polished codebase summaries and SIMPLE mermaid diagrams. Create well-formatted markdown responses with SIMPLE mermaid diagrams that show main features or pages. Use ONLY basic mermaid syntax: graph TD/LR, simple node labels like A[Label], and simple connections like A --> B. NO subgraphs, NO special characters, NO complex styling. Keep diagrams simple and error-free. DO NOT create directory tree structures. Always format mermaid diagrams in markdown code blocks with language "mermaid".';
 	},
 
 	/**

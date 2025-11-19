@@ -45,6 +45,13 @@ class ConversationProvider {
 
 	_readApiKeyFromEnv() {
 		try {
+			// First, check system environment variables
+			if (process.env.OPENAI_API_KEY) {
+				console.log('Found OpenAI API key in system environment variables');
+				return process.env.OPENAI_API_KEY;
+			}
+
+			// Then, check workspace .env file
 			const workspaceFolders = vscode.workspace.workspaceFolders;
 			
 			if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -85,7 +92,7 @@ class ConversationProvider {
 				}
 			}
 			
-			console.log('OPENAI_API_KEY not found in .env file');
+			console.log('OPENAI_API_KEY not found in .env file or system environment');
 			return null;
 		} catch (error) {
 			console.error('Error reading .env file:', error.message);
@@ -415,7 +422,7 @@ class ConversationProvider {
 
 			// Call OpenAI API with tools
 			const response = await this.openai.chat.completions.create({
-				model: 'moonshotai/kimi-k2-thinking',
+				model: 'xai/grok-4-fast-non-reasoning',
 				messages: messages,
 				tools: this._getAvailableTools(),
 				tool_choice: 'auto',

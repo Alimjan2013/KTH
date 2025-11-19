@@ -34,9 +34,9 @@ class AnalysisCache {
 	}
 
 	/**
-	 * Load cached minimax analysis if available and valid
+	 * Load cached Stage 1 analysis if available and valid
 	 * @param {string} currentCodebaseHash - Current hash of the codebase
-	 * @returns {object|null} Cached minimax analysis result or null if not available/invalid
+	 * @returns {object|null} Cached Stage 1 analysis result or null if not available/invalid
 	 */
 	loadCache(currentCodebaseHash) {
 		try {
@@ -71,7 +71,7 @@ class AnalysisCache {
 				fileContentsCount: cache.fileContents ? Object.keys(cache.fileContents).length : 0
 			});
 
-			// Check if cache has required fields (detailedAnalysis from minimax)
+			// Check if cache has required fields (detailedAnalysis from Stage 1)
 			if (!cache.detailedAnalysis) {
 				console.log('Cache invalid: missing required field (detailedAnalysis)');
 				return null;
@@ -85,7 +85,7 @@ class AnalysisCache {
 				return null;
 			}
 
-			console.log('Cache loaded successfully - minimax analysis found');
+			console.log('Cache loaded successfully - Stage 1 analysis found');
 			console.log('Cache details:', {
 				detailedAnalysisPreview: cache.detailedAnalysis.substring(0, 200),
 				features: cache.features,
@@ -107,10 +107,10 @@ class AnalysisCache {
 	}
 
 	/**
-	 * Save minimax analysis result to cache (Stage 1 result)
+	 * Save Stage 1 analysis result to cache
 	 * @param {string} codebaseHash - Hash of the current codebase
-	 * @param {string} detailedAnalysis - Detailed analysis from minimax (Stage 1)
-	 * @param {string[]} features - Detected features from minimax
+	 * @param {string} detailedAnalysis - Detailed analysis from Stage 1
+	 * @param {string[]} features - Detected features from Stage 1
 	 * @param {object} fileContents - File contents read during analysis (optional)
 	 */
 	saveCache(codebaseHash, detailedAnalysis, features, fileContents = {}) {
@@ -138,6 +138,7 @@ class AnalysisCache {
 				featuresCount: features.length,
 				filesRead: Object.keys(fileContents).length
 			});
+			console.log('Stage 1 analysis cache saved successfully');
 			console.log('===================');
 		} catch (error) {
 			console.error('Error saving cache:', error);

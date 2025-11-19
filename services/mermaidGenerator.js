@@ -11,25 +11,27 @@ class MermaidGenerator {
 	 * @returns {string} Mermaid diagram code
 	 */
 	generateSimpleMermaid(treeText, features = []) {
-		// Generate a feature-based mermaid diagram
+		// Generate a SIMPLE feature-based mermaid diagram using basic syntax only
 		let mermaid = 'graph TD\n';
 		
-		// If we have features, use them to create feature-based subgraphs
+		// If we have features, use them to create simple nodes
 		if (features && features.length > 0) {
-			const featureGroups = features.slice(0, 5); // Limit to 5 features
+			const featureGroups = features.slice(0, 8); // Limit to 8 features
 			
+			// Create simple nodes with single letter IDs
+			const nodeIds = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 			featureGroups.forEach((feature, idx) => {
-				const featureId = `Feature${idx}`;
-				const featureName = feature.length > 30 ? feature.substring(0, 30) : feature;
-				mermaid += `\n    subgraph ${featureId}["${featureName}"]\n`;
-				mermaid += `        direction TB\n`;
-				mermaid += `        ${featureId}_A[${featureName} Component]\n`;
-				mermaid += `    end\n`;
+				if (idx < nodeIds.length) {
+					// Clean feature name - remove special characters that might break mermaid
+					const cleanFeature = feature.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 25);
+					const nodeId = nodeIds[idx];
+					mermaid += `    ${nodeId}[${cleanFeature}]\n`;
+				}
 			});
 			
-			// Add connections between features
-			for (let i = 0; i < featureGroups.length - 1; i++) {
-				mermaid += `    Feature${i} --> Feature${i + 1}\n`;
+			// Add simple connections between features (linear flow)
+			for (let i = 0; i < featureGroups.length - 1 && i < nodeIds.length - 1; i++) {
+				mermaid += `    ${nodeIds[i]} --> ${nodeIds[i + 1]}\n`;
 			}
 		} else {
 			// Fallback: try to infer features from directory structure
@@ -50,7 +52,7 @@ class MermaidGenerator {
 							if (!potentialFeatures.includes('API')) potentialFeatures.push('API');
 						}
 						if (dirName.includes('page') || dirName.includes('view') || dirName.includes('component')) {
-							if (!potentialFeatures.includes('UI Components')) potentialFeatures.push('UI Components');
+							if (!potentialFeatures.includes('UI')) potentialFeatures.push('UI');
 						}
 						if (dirName.includes('db') || dirName.includes('database') || dirName.includes('model')) {
 							if (!potentialFeatures.includes('Database')) potentialFeatures.push('Database');
@@ -60,24 +62,23 @@ class MermaidGenerator {
 			}
 			
 			if (potentialFeatures.length > 0) {
+				const nodeIds = ['A', 'B', 'C', 'D'];
 				potentialFeatures.slice(0, 4).forEach((feature, idx) => {
-					const featureId = `Feature${idx}`;
-					mermaid += `\n    subgraph ${featureId}["${feature}"]\n`;
-					mermaid += `        direction TB\n`;
-					mermaid += `        ${featureId}_A[${feature} Module]\n`;
-					mermaid += `    end\n`;
+					if (idx < nodeIds.length) {
+						const cleanFeature = feature.replace(/[^a-zA-Z0-9\s]/g, '').substring(0, 25);
+						mermaid += `    ${nodeIds[idx]}[${cleanFeature}]\n`;
+					}
 				});
 				
-				// Add connections
+				// Add simple connections
 				for (let i = 0; i < potentialFeatures.length - 1 && i < 3; i++) {
-					mermaid += `    Feature${i} --> Feature${i + 1}\n`;
+					mermaid += `    ${nodeIds[i]} --> ${nodeIds[i + 1]}\n`;
 				}
 			} else {
-				// Ultimate fallback: generic structure
-				mermaid += `    subgraph App["Application"]\n`;
-				mermaid += `        direction TB\n`;
-				mermaid += `        A[Main Module]\n`;
-				mermaid += `    end\n`;
+				// Ultimate fallback: simple generic structure
+				mermaid += `    A[Application]\n`;
+				mermaid += `    B[Components]\n`;
+				mermaid += `    A --> B\n`;
 			}
 		}
 		
