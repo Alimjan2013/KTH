@@ -36,7 +36,7 @@ class AnalysisService {
 		console.log('OpenAI client available:', !!this.openai);
 		console.log('Available tools:', JSON.stringify(availableTools, null, 2));
 		console.log('Tool count:', availableTools ? availableTools.length : 0);
-		console.log('Model: xai/grok-4-fast-non-reasoning');
+		console.log('Model: xai/grok-4.1-fast-non-reasoning');
 		console.log('Prompt length:', analysisPrompt.length);
 		console.log('System message length:', systemMessage.length);
 		console.log('========================');
@@ -48,7 +48,7 @@ class AnalysisService {
 		let stage1Response;
 		try {
 			stage1Response = await this.openai.chat.completions.create({
-				model: 'xai/grok-4-fast-non-reasoning',
+				model: 'xai/grok-4.1-fast-non-reasoning',
 				messages: [
 					{
 						role: 'system',
@@ -150,7 +150,7 @@ class AnalysisService {
 
 			while (iteration < maxToolCallIterations) {
 				const finalResponse = await this.openai.chat.completions.create({
-					model: 'xai/grok-4-fast-non-reasoning',
+					model: 'xai/grok-4.1-fast-non-reasoning',
 					messages: currentMessages,
 					tools: this.getAvailableTools(),
 					tool_choice: 'auto',
@@ -352,7 +352,7 @@ class AnalysisService {
 		const systemMessage = prompts.getStage2SystemMessage();
 
 		const stage2Response = await this.openai.chat.completions.create({
-			model: 'xai/grok-4-fast-non-reasoning',
+			model: 'xai/grok-4.1-fast-non-reasoning',
 			messages: [
 				{
 					role: 'system',
