@@ -3,3 +3,5 @@ node_modules
 *.vsix
 .env
 .kth-analysis-cache.json
+media/webview.css
+media/webview.js

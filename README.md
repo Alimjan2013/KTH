@@ -1,65 +1,63 @@
-# KTH README
+# Teach Me (KTH) – VS Code Extension
 
-This is the README for your extension "KTH". After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+Teach Me is an experimental VS Code extension that walks you through an AI-guided project analysis flow and turns the result into step-by-step feature implementation scenes. Stage 1/2 of the analysis run in the extension host (with optional OpenAI tooling), while a React-based webview renders the “cinematic” experience inside a custom activity-bar view.
 
 ---
 
-## Working with Markdown
+## 1. About the Extension
 
-You can author your README using Visual Studio Code.  Here are some useful editor keyboard shortcuts:
+- **Conversational workflow** – a sidebar webview guides the user through Scene 1 (intro), Scene 2 (codebase analysis), and Scene 3 (feature implementation).
+- **Two-stage analysis** – the extension reads your workspace tree, calls the configured OpenAI-compatible endpoint for deeper inspection, and caches both the detailed JSON and the polished markdown.
+- **Feature scaffolding** – the current prototype focuses on the “Auth” path: once analysis finishes, users can jump into Scene 3 to review cached insights and wire up authentication without paying for more LLM calls.
+- **Offline-friendly fallbacks** – when no API key is present or the cache already exists, the extension serves local markdown/mermaid output so you can keep iterating for free.
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux)
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux)
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets
+---
 
-## For more information
+## 2. Project Structure
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+```
+KTH/
+├─ extension.js                # VS Code activation + view registration
+├─ conversationProvider.js     # Webview provider, OpenAI orchestration, caching
+├─ services/                   # Analysis pipeline, cache helpers, dir tree utilities
+├─ media/                      # Bundled JS/CSS served directly to the webview
+├─ webview/                    # React app (Vite + Tailwind) rendered inside the webview
+│  ├─ src/components/Scene1Greeting.jsx
+│  ├─ src/components/Scene2Analyzing.jsx
+│  ├─ src/components/Scene3ImplementAuth.jsx
+│  └─ src/hooks/useVSCodeMessaging.js
+└─ prompts/, ui/, test/, etc.  # Prompt templates, HTML shell, extension tests
+```
 
-**Enjoy!**
+Key idea: everything under the project root runs in the VS Code extension host (Node context), while the `webview/` directory is a standalone React SPA that gets bundled and injected into the webview iframe.
+
+---
+
+## 3. Implementation & Setup
+
+1. **Clone & install dependencies**
+   ```bash
+   cd /path/to/KTH
+   pnpm install            # installs extension-host dependencies
+
+   cd webview
+   pnpm install            # installs React/Vite dependencies
+   pnpm build              # produces media/webview.js + webview.css via Vite
+   ```
+   > The compiled assets land in `media/` and are loaded by `conversationProvider`.
+
+2. **Provide an OpenAI-compatible API key (optional but recommended)**
+   - Add `OPENAI_API_KEY=...` to the root workspace `.env` or export it in the shell before launching VS Code.
+   - The extension also supports the `ai-gateway.vercel.sh` proxy configured in `conversationProvider`.
+
+3. **Run the extension in VS Code**
+   - Open the repository in VS Code.
+   - Press `F5` (or run “Debug: Start Debugging”) to launch an Extension Development Host.
+   - Open the “Teach Me” view from the activity bar to start the scene flow.
+
+4. **Trigger analysis & scene routing**
+   - Scene 1 → click “Start analyzing”.
+   - Scene 2 → wait for the analysis; when finished, the “Auth” button becomes active. Other feature buttons look interactive but are intentionally disabled for now.
+   - Scene 3 → review the cached markdown, follow the outlined implementation steps, or return to Scene 2 to re-run.
+
+That’s it—after the first run, `.kth-analysis-cache.json` (Stage 1 data) and `.kth-analysis-result-cache.md` (Stage 2 markdown) let you revisit Scene 3 without incurring new model costs unless the codebase changes. Enjoy iterating! 
