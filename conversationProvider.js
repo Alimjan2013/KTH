@@ -8,198 +8,7 @@ const prompts = require('./prompts/analysisPrompts');
 
 const STAGE1_CACHE_FILENAME = '.kth-analysis-cache.json';
 const RESULT_CACHE_FILENAME = '.kth-analysis-result-cache.md';
-const DEFAULT_AUTH_DIAGRAM_HTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Supabase Auth Enhancement</title>
-<style>
-:root {
-	--bg-color: #ffffff;
-	--text-color: #000000;
-	--border-std: #555555;
-	--edit-border: #fbc02d;
-  --edit-bg: #ffeebf;
-  --new-border: #4ade80;
-  --new-bg: #d1fae5;
-  --auth-bg: #fff5f5;
-  --auth-border: #fecaca;
-  --auth-tag-bg: #fca5a5;
-}
-body {
-	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-	background-color: #f4f4f4;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	min-height: 100vh;
-	margin: 0;
-}
-.diagram-card {
-	background-color: white;
-	border: 1px solid #ccc;
-	border-radius: 8px;
-	padding: 40px 40px 32px;
-	box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-	width: 640px;
-	position: relative;
-}
-.top-label {
-	position: absolute;
-	top: -12px;
-	left: 0;
-	background: #e0e0e0;
-	padding: 4px 12px;
-	font-size: 12px;
-	border-radius: 4px 4px 0 0;
-	color: #333;
-	font-weight: 500;
-}
-.row {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-}
-.col-left {
-	width: 35%;
-	display: flex;
-	justify-content: center;
-}
-.col-right {
-	width: 55%;
-	display: flex;
-	flex-direction: column;
-	gap: 12px;
-	align-items: center;
-}
-.box-page {
-	border: 2px solid var(--border-std);
-	padding: 15px 20px;
-	width: 100%;
-	text-align: center;
-	background: white;
-	border-radius: 4px;
-	font-size: 18px;
-	font-weight: 500;
-}
-.box-feature {
-	border: 2px solid var(--border-std);
-	padding: 12px 20px;
-	width: 100%;
-	text-align: center;
-	background: white;
-	border-radius: 50px;
-	font-size: 16px;
-}
-.is-edit {
-	background-color: var(--edit-bg);
-	border-color: var(--edit-border);
-}
-.is-new {
-	background-color: var(--new-bg);
-	border-color: var(--new-border);
-}
-.auth-wrapper {
-	background-color: var(--auth-bg);
-	border: 1px solid var(--auth-border);
-	border-radius: 8px;
-	padding: 30px 20px 20px;
-	position: relative;
-	margin-top: 20px;
-	margin-bottom: 20px;
-}
-.auth-tag {
-	position: absolute;
-	top: 0;
-	left: 0;
-	background-color: var(--auth-tag-bg);
-	color: #333;
-	font-size: 10px;
-	font-weight: bold;
-	padding: 3px 8px;
-	border-radius: 8px 0 8px 0;
-	border: 1px solid var(--auth-border);
-}
-.legend {
-	display: flex;
-	justify-content: center;
-	gap: 40px;
-	margin-top: 40px;
-	padding-top: 20px;
-}
-.legend-item {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-	font-size: 16px;
-}
-.legend-box {
-	width: 60px;
-	height: 25px;
-	border-radius: 4px;
-}
-</style>
-</head>
-<body>
-	<div class="diagram-card">
-		<div class="top-label">Next.js App + Supabase Auth</div>
-		<div class="row">
-			<div class="col-left">
-				<div class="box-page">Home Page</div>
-			</div>
-			<div class="col-right">
-				<div class="box-feature is-edit">Navigation</div>
-				<div class="box-feature">Gallery Grid</div>
-				<div class="box-feature">Call-to-actions</div>
-			</div>
-		</div>
-		<div class="auth-wrapper">
-			<div class="auth-tag">Supabase Auth</div>
-			<div class="row">
-				<div class="col-left">
-					<div class="box-page">Auth Page</div>
-				</div>
-				<div class="col-right">
-					<div class="box-feature is-new">Sign Up</div>
-					<div class="box-feature is-new">Log In</div>
-					<div class="box-feature is-new">Magic Link</div>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col-left">
-					<div class="box-page">Album Page</div>
-				</div>
-				<div class="col-right">
-					<div class="box-feature">Image preview</div>
-					<div class="box-feature is-edit">Like content</div>
-					<div class="box-feature is-edit">User comments</div>
-				</div>
-			</div>
-			<div class="row">
-				<div class="col-left">
-					<div class="box-page">Admin Page</div>
-				</div>
-				<div class="col-right">
-					<div class="box-feature is-edit">Upload</div>
-					<div class="box-feature is-edit">Delete</div>
-				</div>
-			</div>
-		</div>
-		<div class="legend">
-			<div class="legend-item">
-				<div class="legend-box is-edit"></div>
-				<span>Existing touchpoints</span>
-			</div>
-			<div class="legend-item">
-				<div class="legend-box is-new"></div>
-				<span>New Auth UX</span>
-			</div>
-		</div>
-	</div>
-</body>
-</html>`;
+const AUTH_PLACEHOLDER_IMAGE_URL = 'https://anki.is-ali.tech/kth-figure-2.png';
 const DEFAULT_AUTH_CHANGES_MARKDOWN = `## Implementation Plan (Supabase Auth)
 
 1. **Install & configure**
@@ -498,7 +307,7 @@ class ConversationProvider {
 			console.warn('OpenAI unavailable, sending fallback auth plan.');
 			webview.postMessage({
 				command: 'authPlanGenerated',
-				diagramHtml: DEFAULT_AUTH_DIAGRAM_HTML,
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
 				changeMarkdown: DEFAULT_AUTH_CHANGES_MARKDOWN
 			});
 			return;
@@ -536,24 +345,20 @@ class ConversationProvider {
 
 			const parsed = JSON.parse(jsonText.trim());
 
-			const diagramHtml = parsed.diagramHtml && parsed.diagramHtml.trim().length > 0
-				? parsed.diagramHtml
-				: DEFAULT_AUTH_DIAGRAM_HTML;
-
 			const changeMarkdown = parsed.changeMarkdown && parsed.changeMarkdown.trim().length > 0
 				? parsed.changeMarkdown
 				: DEFAULT_AUTH_CHANGES_MARKDOWN;
 
 			webview.postMessage({
 				command: 'authPlanGenerated',
-				diagramHtml,
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
 				changeMarkdown
 			});
 		} catch (error) {
 			console.error('Failed to generate auth plan:', error);
 			webview.postMessage({
 				command: 'authPlanGenerated',
-				diagramHtml: DEFAULT_AUTH_DIAGRAM_HTML,
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
 				changeMarkdown: `${DEFAULT_AUTH_CHANGES_MARKDOWN}\n\n> Fallback used because generation failed: ${error.message}`
 			});
 		}

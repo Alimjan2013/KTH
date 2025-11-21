@@ -4,7 +4,7 @@ export function useVSCodeMessaging() {
 	const vscode = useMemo(() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null), []);
 	const [analysisSteps, setAnalysisSteps] = useState([]);
 	const [analysisResult, setAnalysisResult] = useState(null);
-	const [authPlan, setAuthPlan] = useState({ diagramHtml: '', changeMarkdown: '', loading: false });
+	const [authPlan, setAuthPlan] = useState({ diagramImageUrl: '', changeMarkdown: '', loading: false });
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -24,7 +24,7 @@ export function useVSCodeMessaging() {
 						markdown: result.markdown,
 						features: result.features
 					});
-					setAuthPlan({ diagramHtml: '', changeMarkdown: '', loading: false });
+					setAuthPlan({ diagramImageUrl: '', changeMarkdown: '', loading: false });
 					break;
 				case 'analysisError':
 					console.error('Analysis error:', msg.error);
@@ -34,7 +34,7 @@ export function useVSCodeMessaging() {
 					break;
 				case 'authPlanGenerated':
 					setAuthPlan({
-						diagramHtml: msg.diagramHtml || '',
+						diagramImageUrl: msg.diagramImageUrl || '',
 						changeMarkdown: msg.changeMarkdown || '',
 						loading: false
 					});

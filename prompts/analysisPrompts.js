@@ -70,38 +70,16 @@ Remember: Use tools FIRST, then provide the JSON analysis.`;
 		let prompt = `You are analyzing a codebase. Below is information about the codebase structure, files, and dependencies.
 
 YOUR TASK: Create a polished markdown response based on this information that includes:
-1. A polished, concise description (2-3 sentences) of what type of project this is
-2. A SIMPLE feature-based mermaid diagram showing the main features or pages
+1. A polished, concise description (2-3 sentences) of what type of project this is.
+2. A list of notable features or flows.
+3. An "Architecture Snapshot" section that embeds the following placeholder image using standard markdown syntax:
 
-IMPORTANT: 
-- You MUST analyze the codebase using the information provided below
-- Create a FEATURE-BASED diagram (NOT a directory tree). Show main features or pages.
-- Respond in MARKDOWN format (not JSON)
-- Include the mermaid diagram in a markdown code block with language "mermaid"
-- Use proper markdown formatting for headings, lists, etc.
-- KEEP THE MERMAID DIAGRAM SIMPLE - use basic syntax only, avoid complex features
+![Architecture Placeholder](https://anki.is-ali.tech/kth-figure-1.png)
 
-MERMAID RULES (CRITICAL - FOLLOW THESE EXACTLY):
-- Use simple graph syntax: graph TD or graph LR
-- Use simple node labels: A[Label] or B[Feature Name]
-- Use simple connections: A --> B
-- NO special characters in labels (no quotes, no brackets inside brackets, no line breaks)
-- NO subgraphs with direction
-- NO complex styling
-- Keep node IDs simple (single letters or simple words)
-- Maximum 10-15 nodes total
-
-Example mermaid format (SIMPLE):
-\`\`\`mermaid
-graph TD
-    A[Home Page]
-    B[Albums Page]
-    C[Admin Page]
-    D[Image Gallery]
-    A --> B
-    B --> D
-    C --> D
-\`\`\`
+IMPORTANT:
+- Do NOT generate mermaid diagrams for now; the screenshot above acts as the visual placeholder.
+- Respond in MARKDOWN format (not JSON).
+- Use proper markdown headings and bullet lists.
 
 Example markdown structure:
 # Project Analysis
@@ -113,11 +91,9 @@ Example markdown structure:
 - Feature 1
 - Feature 2
 
-## Architecture Diagram
+## Architecture Snapshot
 
-\`\`\`mermaid
-[Your mermaid diagram here]
-\`\`\`
+![Architecture Placeholder](https://anki.is-ali.tech/kth-figure-1.png)
 
 === DETAILED CODEBASE ANALYSIS FROM STAGE 1 ===
 
@@ -163,232 +139,33 @@ ${detailedAnalysis}
 	 * System message for Stage 2 polishing
 	 */
 	getStage2SystemMessage() {
-		return 'You are an expert at creating polished codebase summaries and SIMPLE mermaid diagrams. Create well-formatted markdown responses with SIMPLE mermaid diagrams that show main features or pages. Use ONLY basic mermaid syntax: graph TD/LR, simple node labels like A[Label], and simple connections like A --> B. NO subgraphs, NO special characters, NO complex styling. Keep diagrams simple and error-free. DO NOT create directory tree structures. Always format mermaid diagrams in markdown code blocks with language "mermaid".';
+		return 'You are an expert at creating polished codebase summaries. Produce well-formatted markdown with concise descriptions, bullet lists, and an "Architecture Snapshot" section that embeds the provided placeholder image instead of generating mermaid diagrams.';
 	},
 
 	getScene3AuthPrompt(analysisMarkdown, feature = 'Auth') {
-		const referenceHtml = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NextJS Application Diagram</title>
-    <style>
-        :root {
-            --bg-color: #ffffff;
-            --text-color: #000000;
-            --border-std: #555555;
-            --edit-border: #fbc02d;
-            --edit-bg: #ffeebf;
-            --new-border: #4ade80;
-            --new-bg: #d1fae5;
-            --auth-bg: #fff5f5;
-            --auth-border: #fecaca;
-            --auth-tag-bg: #fca5a5;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: #f4f4f4;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        .diagram-card {
-            background-color: white;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 40px;
-            padding-top: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            width: 600px;
-            position: relative;
-        }
-        .top-label {
-            position: absolute;
-            top: -12px;
-            left: 0;
-            background: #e0e0e0;
-            padding: 4px 12px;
-            font-size: 12px;
-            border-radius: 4px 4px 0 0;
-            color: #333;
-            font-weight: 500;
-        }
-        .row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .col-left {
-            width: 35%;
-            display: flex;
-            justify-content: center;
-        }
-        .col-right {
-            width: 55%;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            align-items: center;
-        }
-        .box-page {
-            border: 2px solid var(--border-std);
-            padding: 15px 20px;
-            width: 100%;
-            text-align: center;
-            background: white;
-            border-radius: 4px;
-            font-size: 18px;
-            font-weight: 500;
-        }
-        .box-feature {
-            border: 2px solid var(--border-std);
-            padding: 12px 20px;
-            width: 100%;
-            text-align: center;
-            background: white;
-            border-radius: 50px;
-            font-size: 16px;
-        }
-        .is-edit {
-            background-color: var(--edit-bg);
-            border-color: var(--edit-border);
-        }
-        .is-new {
-            background-color: var(--new-bg);
-            border-color: var(--new-border);
-        }
-        .auth-wrapper {
-            background-color: var(--auth-bg);
-            border: 1px solid var(--auth-border);
-            border-radius: 8px;
-            padding: 30px 20px 20px 20px;
-            position: relative;
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-        .auth-tag {
-            position: absolute;
-            top: 0;
-            left: 0;
-            background-color: var(--auth-tag-bg);
-            color: #333;
-            font-size: 10px;
-            font-weight: bold;
-            padding: 3px 8px;
-            border-radius: 8px 0 8px 0;
-            border: 1px solid var(--auth-border);
-        }
-        .legend {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            margin-top: 40px;
-            padding-top: 20px;
-        }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 16px;
-        }
-        .legend-box {
-            width: 60px;
-            height: 25px;
-            border-radius: 4px;
-        }
-    </style>
-</head>
-<body>
-    <div class="diagram-card">
-        <div class="top-label">NextJS / Gallery application</div>
-        <div class="row">
-            <div class="col-left">
-                <div class="box-page">Home page</div>
-            </div>
-            <div class="col-right">
-                <div class="box-feature is-edit">Menu bar</div>
-                <div class="box-feature">Carousel</div>
-                <div class="box-feature">selective Albums</div>
-            </div>
-        </div>
-        <div class="auth-wrapper">
-            <div class="auth-tag">Auth protect</div>
-            <div class="row">
-                <div class="col-left">
-                    <div class="box-page">Auth page</div>
-                </div>
-                <div class="col-right">
-                    <div class="box-feature is-new">Log In</div>
-                    <div class="box-feature is-new">Sign In</div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-left">
-                    <div class="box-page">Album page</div>
-                </div>
-                <div class="col-right">
-                    <div class="box-feature">Image preview</div>
-                    <div class="box-feature">Image description</div>
-                    <div class="box-feature is-edit">Like content</div>
-                    <div class="box-feature is-edit">user comment</div>
-                </div>
-            </div>
-            <div class="row">
-                <div class="col-left">
-                    <div class="box-page">Admin page</div>
-                </div>
-                <div class="col-right">
-                    <div class="box-feature is-edit">Upload image</div>
-                    <div class="box-feature is-edit">Delete image</div>
-                </div>
-            </div>
-        </div>
-        <div class="legend">
-            <div class="legend-item">
-                <div class="legend-box is-edit"></div>
-                <span>Edit feature</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-box is-new"></div>
-                <span>New Feature</span>
-            </div>
-        </div>
-    </div>
-</body>
-</html>`;
-
 		return `You are designing a storyboard for extending an existing Next.js application with Supabase-based ${feature} functionality.
 
 INPUT ANALYSIS (markdown from Stage 2):
 ${analysisMarkdown}
 
 TASKS:
-1. Create a visually rich HTML snippet (no markdown code fences) that illustrates the project "after adding Supabase ${feature}". Use inline CSS similar to the reference template below (card, rows, pill-shaped feature chips, "Auth protect" tag, etc.). You may customize text/content to match the project analysis. Keep it self-contained so it can be rendered inside a DIV via \`innerHTML\`.
-2. Produce a concise markdown section describing what parts of the codebase must change (files to add/edit, libraries to install, routing/middleware updates, UI hooks). Prefer actionable bullet lists.
+1. Acknowledge that the visual storyboard will be represented by this static image inside the UI (do NOT generate HTML yourself): https://anki.is-ali.tech/kth-figure-2.png
+2. Produce a concise markdown section describing what parts of the codebase must change (files to add/edit, libraries to install, routing/middleware updates, UI hooks). Prefer actionable bullet lists grouped by theme.
 
-REFERENCE HTML STYLE (for inspiration, do NOT copy verbatim—adapt texts to match the current project):
-${referenceHtml}
-
-OUTPUT FORMAT (JSON ONLY):
+OUTPUT FORMAT (JSON ONLY, no code fences):
 {
-  "diagramHtml": "<!DOCTYPE html>....</html>",
   "changeMarkdown": "## What will change\\n- ... bullet list ..."
 }
 
 RULES:
 - Do NOT wrap the JSON in triple backticks.
-- Ensure \`diagramHtml\` is valid HTML string without escaping newlines (use \\n only if necessary).
 - \`changeMarkdown\` must be valid markdown (headings + bullets).
 - Focus on Supabase auth primitives: signup/login, session provider, protected routes, admin gating.
 - If input analysis lacks details, make reasonable assumptions but call them out explicitly.`;
 	},
 
 	getScene3SystemMessage() {
-		return 'You are a product-minded staff engineer helping storyboard feature additions. You provide rich HTML sketches (with inline CSS) and concise markdown implementation notes. Always respond with valid JSON that includes "diagramHtml" and "changeMarkdown".';
+		return 'You are a product-minded staff engineer helping storyboard feature additions. The UI already has a static illustration, so focus on concise markdown implementation notes only. Always respond with valid JSON that includes "changeMarkdown".';
 	},
 
 	/**

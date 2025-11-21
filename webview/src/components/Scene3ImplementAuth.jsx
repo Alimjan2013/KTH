@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo } from "react";
 import { Streamdown } from "streamdown";
 
+const ANALYSIS_PLACEHOLDER_IMAGE_URL =
+  "https://anki.is-ali.tech/kth-figure-1.png";
+const AUTH_PLACEHOLDER_IMAGE_URL =
+  "https://anki.is-ali.tech/kth-figure-2.png";
+
 export function Scene3ImplementAuth({
   analysisResult,
   authPlan,
@@ -10,17 +15,12 @@ export function Scene3ImplementAuth({
 }) {
   const markdown = useMemo(() => analysisResult?.markdown ?? "", [analysisResult]);
   const features = Array.isArray(analysisResult?.features) ? analysisResult.features : [];
-  const mermaidSnippet = useMemo(() => {
-    if (!markdown) return "";
-    const match = markdown.match(/```mermaid\s*([\s\S]*?)```/i);
-    return match ? match[1].trim() : "";
-  }, [markdown]);
 
   useEffect(() => {
-    if (analysisResult && onRequestPlan && !authPlan?.diagramHtml && !authPlan?.loading) {
+    if (analysisResult && onRequestPlan && !authPlan?.changeMarkdown && !authPlan?.loading) {
       onRequestPlan();
     }
-  }, [analysisResult, authPlan?.diagramHtml, authPlan?.loading, onRequestPlan]);
+  }, [analysisResult, authPlan?.changeMarkdown, authPlan?.loading, onRequestPlan]);
 
   return (
     <div className="h-screen flex flex-col p-6 overflow-y-auto gap-6">
@@ -41,7 +41,7 @@ export function Scene3ImplementAuth({
           <h2 className="text-xl font-semibold text-(--vscode-foreground)">Plan Overview</h2>
           <ol className="space-y-3 text-sm text-(--vscode-foreground)">
             <li>
-              <span className="font-bold">1.</span> Snapshot the current mermaid diagram for context.
+              <span className="font-bold">1.</span> Snapshot the current architecture placeholder for context.
             </li>
             <li>
               <span className="font-bold">2.</span> Compare with the Supabase-enhanced storyboard.
@@ -64,14 +64,28 @@ export function Scene3ImplementAuth({
           </div>
         </div>
 
-        <div className="col-span-2 bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5">
-          <h2 className="text-xl font-semibold mb-2 text-(--vscode-foreground)">Current Mermaid (cached)</h2>
-          {mermaidSnippet ? (
-            <Streamdown>{`\`\`\`mermaid\n${mermaidSnippet}\n\`\`\``}</Streamdown>
-          ) : (
-            <p className="text-(--vscode-descriptionForeground)">No mermaid diagram detected in the cached analysis.</p>
-          )}
+        <div className="col-span-2 bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
+          <h2 className="text-xl font-semibold text-(--vscode-foreground)">Current snapshot (cached)</h2>
+          <img
+            src={ANALYSIS_PLACEHOLDER_IMAGE_URL}
+            alt="Architecture placeholder"
+            className="w-full rounded-lg border border-(--vscode-input-border)"
+          />
+          <p className="text-sm text-(--vscode-descriptionForeground)">
+            This placeholder image represents the high-level architecture captured during analysis.
+          </p>
         </div>
+      </section>
+
+      <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
+        <h2 className="text-xl font-semibold text-(--vscode-foreground)">Cached analysis reference</h2>
+        {markdown ? (
+          <div className="prose prose-invert max-w-none">
+            <Streamdown>{markdown}</Streamdown>
+          </div>
+        ) : (
+          <p className="text-(--vscode-descriptionForeground)">No cached analysis result found.</p>
+        )}
       </section>
 
       <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
@@ -83,16 +97,14 @@ export function Scene3ImplementAuth({
             </span>
           )}
         </div>
-        {authPlan?.diagramHtml ? (
-          <div
-            className="rounded-lg overflow-hidden border border-(--vscode-input-border) bg-white"
-            dangerouslySetInnerHTML={{ __html: authPlan.diagramHtml }}
-          />
-        ) : (
-          <div className="text-(--vscode-descriptionForeground) text-sm">
-            Waiting for storyboard…
-          </div>
-        )}
+        <img
+          src={authPlan?.diagramImageUrl || AUTH_PLACEHOLDER_IMAGE_URL}
+          alt="Supabase auth storyboard placeholder"
+          className="w-full rounded-lg border border-(--vscode-input-border) bg-white"
+        />
+        <p className="text-sm text-(--vscode-descriptionForeground)">
+          Visual placeholder only; follow the instructions below for actual code changes.
+        </p>
       </section>
 
       <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
