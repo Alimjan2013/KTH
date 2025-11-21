@@ -8,6 +8,228 @@ const prompts = require('./prompts/analysisPrompts');
 
 const STAGE1_CACHE_FILENAME = '.kth-analysis-cache.json';
 const RESULT_CACHE_FILENAME = '.kth-analysis-result-cache.md';
+const DEFAULT_AUTH_DIAGRAM_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Supabase Auth Enhancement</title>
+<style>
+:root {
+	--bg-color: #ffffff;
+	--text-color: #000000;
+	--border-std: #555555;
+	--edit-border: #fbc02d;
+  --edit-bg: #ffeebf;
+  --new-border: #4ade80;
+  --new-bg: #d1fae5;
+  --auth-bg: #fff5f5;
+  --auth-border: #fecaca;
+  --auth-tag-bg: #fca5a5;
+}
+body {
+	font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+	background-color: #f4f4f4;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	min-height: 100vh;
+	margin: 0;
+}
+.diagram-card {
+	background-color: white;
+	border: 1px solid #ccc;
+	border-radius: 8px;
+	padding: 40px 40px 32px;
+	box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+	width: 640px;
+	position: relative;
+}
+.top-label {
+	position: absolute;
+	top: -12px;
+	left: 0;
+	background: #e0e0e0;
+	padding: 4px 12px;
+	font-size: 12px;
+	border-radius: 4px 4px 0 0;
+	color: #333;
+	font-weight: 500;
+}
+.row {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 20px;
+}
+.col-left {
+	width: 35%;
+	display: flex;
+	justify-content: center;
+}
+.col-right {
+	width: 55%;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	align-items: center;
+}
+.box-page {
+	border: 2px solid var(--border-std);
+	padding: 15px 20px;
+	width: 100%;
+	text-align: center;
+	background: white;
+	border-radius: 4px;
+	font-size: 18px;
+	font-weight: 500;
+}
+.box-feature {
+	border: 2px solid var(--border-std);
+	padding: 12px 20px;
+	width: 100%;
+	text-align: center;
+	background: white;
+	border-radius: 50px;
+	font-size: 16px;
+}
+.is-edit {
+	background-color: var(--edit-bg);
+	border-color: var(--edit-border);
+}
+.is-new {
+	background-color: var(--new-bg);
+	border-color: var(--new-border);
+}
+.auth-wrapper {
+	background-color: var(--auth-bg);
+	border: 1px solid var(--auth-border);
+	border-radius: 8px;
+	padding: 30px 20px 20px;
+	position: relative;
+	margin-top: 20px;
+	margin-bottom: 20px;
+}
+.auth-tag {
+	position: absolute;
+	top: 0;
+	left: 0;
+	background-color: var(--auth-tag-bg);
+	color: #333;
+	font-size: 10px;
+	font-weight: bold;
+	padding: 3px 8px;
+	border-radius: 8px 0 8px 0;
+	border: 1px solid var(--auth-border);
+}
+.legend {
+	display: flex;
+	justify-content: center;
+	gap: 40px;
+	margin-top: 40px;
+	padding-top: 20px;
+}
+.legend-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 16px;
+}
+.legend-box {
+	width: 60px;
+	height: 25px;
+	border-radius: 4px;
+}
+</style>
+</head>
+<body>
+	<div class="diagram-card">
+		<div class="top-label">Next.js App + Supabase Auth</div>
+		<div class="row">
+			<div class="col-left">
+				<div class="box-page">Home Page</div>
+			</div>
+			<div class="col-right">
+				<div class="box-feature is-edit">Navigation</div>
+				<div class="box-feature">Gallery Grid</div>
+				<div class="box-feature">Call-to-actions</div>
+			</div>
+		</div>
+		<div class="auth-wrapper">
+			<div class="auth-tag">Supabase Auth</div>
+			<div class="row">
+				<div class="col-left">
+					<div class="box-page">Auth Page</div>
+				</div>
+				<div class="col-right">
+					<div class="box-feature is-new">Sign Up</div>
+					<div class="box-feature is-new">Log In</div>
+					<div class="box-feature is-new">Magic Link</div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-left">
+					<div class="box-page">Album Page</div>
+				</div>
+				<div class="col-right">
+					<div class="box-feature">Image preview</div>
+					<div class="box-feature is-edit">Like content</div>
+					<div class="box-feature is-edit">User comments</div>
+				</div>
+			</div>
+			<div class="row">
+				<div class="col-left">
+					<div class="box-page">Admin Page</div>
+				</div>
+				<div class="col-right">
+					<div class="box-feature is-edit">Upload</div>
+					<div class="box-feature is-edit">Delete</div>
+				</div>
+			</div>
+		</div>
+		<div class="legend">
+			<div class="legend-item">
+				<div class="legend-box is-edit"></div>
+				<span>Existing touchpoints</span>
+			</div>
+			<div class="legend-item">
+				<div class="legend-box is-new"></div>
+				<span>New Auth UX</span>
+			</div>
+		</div>
+	</div>
+</body>
+</html>`;
+const DEFAULT_AUTH_CHANGES_MARKDOWN = `## Implementation Plan (Supabase Auth)
+
+1. **Install & configure**
+   - \`pnpm add @supabase/supabase-js @supabase/auth-helpers-nextjs\`
+   - Create a Supabase project and note the URL + anon/public keys.
+   - Add the keys to \`.env.local\` and wire them through \`next.config.js\` if needed.
+
+2. **Bootstrap auth helpers**
+   - Create \`lib/supabaseClient.ts\` that wraps \`createBrowserSupabaseClient\`.
+   - Add \`SupabaseProvider\` in \`app/layout.tsx\` (client boundary) to share session context.
+
+3. **Public auth routes**
+   - Add \`/app/(auth)/signin/page.tsx\` and \`/signup\` pages that render Supabase UI widgets (or custom forms hitting \`supabase.auth.signInWithPassword\` etc.).
+   - Include magic-link CTA for frictionless onboarding.
+
+4. **Protected areas**
+   - Wrap feature routes (albums, admin) with middleware guard:
+     \`\`\`
+     export const middleware = authMiddleware({ request: { cookies }});
+     export const config = { matcher: ['/albums/:path*', '/admin/:path*'] };
+     \`\`\`
+   - Inside pages/components, call \`const { session } = useSupabase()\` to branch UI.
+
+5. **UI wiring**
+   - Replace the “Auth” button in the navbar with a \`SignIn/SignOut\` dropdown tied to session state.
+   - Show avatar + quick links for authenticated users.
+
+6. **Server actions / RLS**
+   - Move data mutations (upload/delete, like/comment) to Supabase server actions or Edge functions with Row Level Security tied to \`auth.uid()\`.
+   - Update SQL policies to allow content owners to modify their own records.`;
 
 class ConversationProvider {
 	constructor(context) {
@@ -15,6 +237,7 @@ class ConversationProvider {
 		this.conversationHistory = [];
 		this.openaiApiKey = null;
 		this.openai = null;
+		this.latestAnalysisResult = null;
 		this._initializeOpenAI();
 	}
 
@@ -147,6 +370,9 @@ class ConversationProvider {
 					case 'cacheAnalysisResult':
 						this._cacheAnalysisResult(message.markdown, message.features);
 						return;
+					case 'generateAuthPlan':
+						this._generateAuthPlan(message.feature || 'Auth');
+						return;
 				}
 			},
 			null,
@@ -180,6 +406,10 @@ class ConversationProvider {
 
 			fs.writeFileSync(filePath, fileContent, 'utf8');
 			console.log(`Analysis result cached at ${filePath}`);
+			this.latestAnalysisResult = {
+				markdown: markdownContent,
+				features: safeFeatures
+			};
 		} catch (error) {
 			console.error('Failed to cache analysis result:', error);
 		}
@@ -237,12 +467,95 @@ class ConversationProvider {
 				return null;
 			}
 
+			const result = { markdown, features };
 			console.log('Loaded cached analysis result from file.');
-
-			return { markdown, features };
+			this.latestAnalysisResult = result;
+			return result;
 		} catch (error) {
 			console.error('Failed to load cached analysis result:', error);
 			return null;
+		}
+	}
+
+	async _generateAuthPlan(feature = 'Auth') {
+		if (!this._view) {
+			console.warn('No active webview to send auth plan.');
+			return;
+		}
+
+		const webview = this._view.webview;
+		const analysis = this.latestAnalysisResult || this._loadCachedAnalysisResult();
+
+		if (!analysis || !analysis.markdown) {
+			webview.postMessage({
+				command: 'authPlanError',
+				error: 'No cached analysis found. Please rerun the analysis first.'
+			});
+			return;
+		}
+
+		if (!this.openai) {
+			console.warn('OpenAI unavailable, sending fallback auth plan.');
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramHtml: DEFAULT_AUTH_DIAGRAM_HTML,
+				changeMarkdown: DEFAULT_AUTH_CHANGES_MARKDOWN
+			});
+			return;
+		}
+
+		try {
+			webview.postMessage({
+				command: 'authPlanLoading',
+				status: 'Generating Supabase auth plan...'
+			});
+
+			const prompt = prompts.getScene3AuthPrompt(analysis.markdown, feature);
+			const response = await this.openai.chat.completions.create({
+				model: 'xai/grok-4.1-fast-non-reasoning',
+				messages: [
+					{
+						role: 'system',
+						content: prompts.getScene3SystemMessage()
+					},
+					{
+						role: 'user',
+						content: prompt
+					}
+				],
+				temperature: 0.4,
+				max_tokens: 4000
+			});
+
+			const messageContent = response.choices[0].message.content || '';
+			let jsonText = messageContent;
+			const fenced = messageContent.match(/```json\s*([\s\S]*?)```/i);
+			if (fenced) {
+				jsonText = fenced[1];
+			}
+
+			const parsed = JSON.parse(jsonText.trim());
+
+			const diagramHtml = parsed.diagramHtml && parsed.diagramHtml.trim().length > 0
+				? parsed.diagramHtml
+				: DEFAULT_AUTH_DIAGRAM_HTML;
+
+			const changeMarkdown = parsed.changeMarkdown && parsed.changeMarkdown.trim().length > 0
+				? parsed.changeMarkdown
+				: DEFAULT_AUTH_CHANGES_MARKDOWN;
+
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramHtml,
+				changeMarkdown
+			});
+		} catch (error) {
+			console.error('Failed to generate auth plan:', error);
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramHtml: DEFAULT_AUTH_DIAGRAM_HTML,
+				changeMarkdown: `${DEFAULT_AUTH_CHANGES_MARKDOWN}\n\n> Fallback used because generation failed: ${error.message}`
+			});
 		}
 	}
 
@@ -261,6 +574,7 @@ class ConversationProvider {
 					markdown: cachedResult.markdown,
 					features: cachedResult.features || []
 				});
+				this.latestAnalysisResult = cachedResult;
 				return;
 			}
 

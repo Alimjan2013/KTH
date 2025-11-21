@@ -4,12 +4,13 @@ import { createRoot } from 'react-dom/client';
 import { Scene1Greeting } from './components/Scene1Greeting.jsx';
 import { Scene2Analyzing } from './components/Scene2Analyzing.jsx';
 import { Scene3ImplementAuth } from './components/Scene3ImplementAuth.jsx';
+import { Scene4Guide } from './components/Scene4Guide.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
 	const [currentScene, setCurrentScene] = useState(1);
 	const [selectedFeature, setSelectedFeature] = useState(null);
-	const { startAnalysis, analysisSteps, analysisResult } = useVSCodeMessaging();
+	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan } = useVSCodeMessaging();
 
 	function handleStartAnalyzing() {
 		setCurrentScene(2);
@@ -21,6 +22,10 @@ function App() {
 		if (feature === 'Auth') {
 			setCurrentScene(3);
 		}
+	}
+
+	function handleGuide() {
+		setCurrentScene(4);
 	}
 
 	return (
@@ -37,8 +42,14 @@ function App() {
 			{currentScene === 3 && (
 				<Scene3ImplementAuth
 					analysisResult={analysisResult}
+					authPlan={authPlan}
 					onBack={() => setCurrentScene(2)}
+					onGuide={handleGuide}
+					onRequestPlan={() => requestAuthPlan('Auth')}
 				/>
+			)}
+			{currentScene === 4 && (
+				<Scene4Guide onBack={() => setCurrentScene(3)} />
 			)}
 		</div>
 	);

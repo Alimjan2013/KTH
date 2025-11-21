@@ -4,6 +4,7 @@ export function useVSCodeMessaging() {
 	const vscode = useMemo(() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null), []);
 	const [analysisSteps, setAnalysisSteps] = useState([]);
 	const [analysisResult, setAnalysisResult] = useState(null);
+	const [authPlan, setAuthPlan] = useState({ diagramHtml: '', changeMarkdown: '', loading: false });
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -23,9 +24,24 @@ export function useVSCodeMessaging() {
 						markdown: result.markdown,
 						features: result.features
 					});
+					setAuthPlan({ diagramHtml: '', changeMarkdown: '', loading: false });
 					break;
 				case 'analysisError':
 					console.error('Analysis error:', msg.error);
+					break;
+				case 'authPlanLoading':
+					setAuthPlan((prev) => ({ ...prev, loading: true }));
+					break;
+				case 'authPlanGenerated':
+					setAuthPlan({
+						diagramHtml: msg.diagramHtml || '',
+						changeMarkdown: msg.changeMarkdown || '',
+						loading: false
+					});
+					break;
+				case 'authPlanError':
+					console.error('Auth plan error:', msg.error);
+					setAuthPlan((prev) => ({ ...prev, loading: false }));
 					break;
 			}
 		};
@@ -39,7 +55,12 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'startAnalysis' });
 	}
 
-	return { startAnalysis, analysisSteps, analysisResult };
+	function requestAuthPlan(feature = 'Auth') {
+		setAuthPlan((prev) => ({ ...prev, loading: true }));
+		vscode?.postMessage({ command: 'generateAuthPlan', feature });
+	}
+
+	return { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan };
 }
 
 
