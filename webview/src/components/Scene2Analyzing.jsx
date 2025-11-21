@@ -5,6 +5,7 @@ export function Scene2Analyzing({
   analysisSteps,
   analysisResult,
   onFeatureSelect,
+  selectedFeature,
 }) {
   const [showResult, setShowResult] = useState(false);
 
@@ -86,39 +87,62 @@ export function Scene2Analyzing({
           </div>
 
           {/* Feature Selection */}
-          <div className="mt-6">
-            <p className="text-lg font-semibold mb-4 text-[var(--vscode-foreground)]">
-              Do you want to add:
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => onFeatureSelect("Auth")}
-                className="px-6 py-4 rounded-lg bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:opacity-90 transition-opacity font-medium"
-              >
-                Auth
-              </button>
-              <button
-                onClick={() => onFeatureSelect("Database")}
-                className="px-6 py-4 rounded-lg bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:opacity-90 transition-opacity font-medium"
-              >
-                Database
-              </button>
-              <button
-                onClick={() => onFeatureSelect("Payment")}
-                className="px-6 py-4 rounded-lg bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:opacity-90 transition-opacity font-medium"
-              >
-                Payment
-              </button>
-              <button
-                onClick={() => onFeatureSelect("Storage")}
-                className="px-6 py-4 rounded-lg bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:opacity-90 transition-opacity font-medium"
-              >
-                Storage
-              </button>
-            </div>
-          </div>
+          <FeatureSelection
+            analysisReady={!!analysisResult}
+            onFeatureSelect={onFeatureSelect}
+            selectedFeature={selectedFeature}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+function FeatureSelection({ analysisReady, onFeatureSelect, selectedFeature }) {
+  const features = [
+    { key: "Auth", label: "Auth", enabled: true, description: "Implement auth flow" },
+    { key: "Database", label: "Database", enabled: false, description: "Coming soon" },
+    { key: "Payment", label: "Payment", enabled: false, description: "Coming soon" },
+    { key: "Storage", label: "Storage", enabled: false, description: "Coming soon" },
+  ];
+
+  return (
+    <div className="mt-6">
+      <p className="text-lg font-semibold mb-4 text-[var(--vscode-foreground)]">
+        Choose the next feature to implement:
+      </p>
+      <div className="grid grid-cols-2 gap-3">
+        {features.map((feature) => {
+          const isDisabled = !analysisReady || !feature.enabled;
+          const isSelected = selectedFeature === feature.key;
+          return (
+            <button
+              key={feature.key}
+              onClick={() => !isDisabled && onFeatureSelect(feature.key)}
+              disabled={isDisabled}
+              className={`px-6 py-4 rounded-lg transition-all font-medium border ${
+                isDisabled
+                  ? "bg-[var(--vscode-input-background)] text-[color-mix(in srgb, var(--vscode-foreground) 60%, transparent)] border-transparent cursor-not-allowed"
+                  : "bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:opacity-90 cursor-pointer"
+              } ${isSelected ? "ring-2 ring-[var(--vscode-focusBorder)]" : ""}`}
+              aria-disabled={isDisabled}
+              title={feature.description}
+            >
+              {feature.label}
+              {feature.key === "Auth" && !isDisabled && (
+                <span className="block text-xs text-[var(--vscode-descriptionForeground)] mt-1">
+                  {isSelected ? "Selected" : "Ready"}
+                </span>
+              )}
+              {feature.key !== "Auth" && (
+                <span className="block text-xs text-[var(--vscode-descriptionForeground)] mt-1">
+                  Coming soon
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

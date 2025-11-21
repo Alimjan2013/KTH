@@ -3,10 +3,12 @@ import './index.css';
 import { createRoot } from 'react-dom/client';
 import { Scene1Greeting } from './components/Scene1Greeting.jsx';
 import { Scene2Analyzing } from './components/Scene2Analyzing.jsx';
+import { Scene3ImplementAuth } from './components/Scene3ImplementAuth.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
 	const [currentScene, setCurrentScene] = useState(1);
+	const [selectedFeature, setSelectedFeature] = useState(null);
 	const { startAnalysis, analysisSteps, analysisResult } = useVSCodeMessaging();
 
 	function handleStartAnalyzing() {
@@ -15,8 +17,10 @@ function App() {
 	}
 
 	function handleFeatureSelect(feature) {
-		console.log('Feature selected:', feature);
-		// TODO: Handle feature selection in future scenes
+		setSelectedFeature(feature);
+		if (feature === 'Auth') {
+			setCurrentScene(3);
+		}
 	}
 
 	return (
@@ -27,6 +31,13 @@ function App() {
 					analysisSteps={analysisSteps}
 					analysisResult={analysisResult}
 					onFeatureSelect={handleFeatureSelect}
+					selectedFeature={selectedFeature}
+				/>
+			)}
+			{currentScene === 3 && (
+				<Scene3ImplementAuth
+					analysisResult={analysisResult}
+					onBack={() => setCurrentScene(2)}
 				/>
 			)}
 		</div>
