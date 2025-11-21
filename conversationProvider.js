@@ -6,6 +6,9 @@ const { getReactHtml } = require('./ui/conversationHtml');
 const AnalysisService = require('./services/analysisService');
 const prompts = require('./prompts/analysisPrompts');
 
+const STAGE1_CACHE_FILENAME = '.kth-analysis-cache.json';
+const RESULT_CACHE_FILENAME = '.kth-analysis-result-cache.md';
+
 class ConversationProvider {
 	constructor(context) {
 		this.context = context;
@@ -141,12 +144,108 @@ class ConversationProvider {
 					case 'startAnalysis':
 						this._startAnalysis(webviewView.webview);
 						return;
+					case 'cacheAnalysisResult':
+						this._cacheAnalysisResult(message.markdown, message.features);
+						return;
 				}
 			},
 			null,
 			this.context.subscriptions
 		);
 	}
+	_cacheAnalysisResult(markdownContent = '', features = []) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				console.warn('Cannot cache analysis result: no workspace is open.');
+				return;
+			}
+
+			if (typeof markdownContent !== 'string' || markdownContent.trim().length === 0) {
+				console.warn('Cannot cache analysis result: markdown content is empty.');
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const filePath = path.join(workspacePath, RESULT_CACHE_FILENAME);
+
+			const timestamp = new Date().toISOString();
+			const safeFeatures = Array.isArray(features) ? features : [];
+			const metadataLines = [
+				`<!-- Cached analysis generated at ${timestamp} -->`,
+				`<!-- FeaturesJSON: ${JSON.stringify(safeFeatures)} -->`,
+				''
+			];
+			const fileContent = metadataLines.join('\n') + markdownContent;
+
+			fs.writeFileSync(filePath, fileContent, 'utf8');
+			console.log(`Analysis result cached at ${filePath}`);
+		} catch (error) {
+			console.error('Failed to cache analysis result:', error);
+		}
+	}
+
+	_loadCachedAnalysisResult() {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				return null;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const filePath = path.join(workspacePath, RESULT_CACHE_FILENAME);
+			if (!fs.existsSync(filePath)) {
+				return null;
+			}
+
+			const rawContent = fs.readFileSync(filePath, 'utf8');
+
+			let features = [];
+			let markdownStartIndex = 0;
+			const lines = rawContent.split(/\r?\n/);
+
+			for (let i = 0; i < lines.length; i++) {
+				const line = lines[i];
+				if (line.startsWith('<!--')) {
+					const featureJsonMatch = line.match(/<!--\s*FeaturesJSON:\s*(.+?)\s*-->/i);
+					if (featureJsonMatch) {
+						try {
+							const parsed = JSON.parse(featureJsonMatch[1]);
+							if (Array.isArray(parsed)) {
+								features = parsed;
+							}
+						} catch (error) {
+							console.warn('Failed to parse FeaturesJSON metadata:', error.message);
+						}
+					} else {
+						const featureListMatch = line.match(/<!--\s*Features:\s*(.+?)\s*-->/i);
+						if (featureListMatch) {
+							features = featureListMatch[1]
+								.split(',')
+								.map(item => item.trim())
+								.filter(Boolean);
+						}
+					}
+					continue;
+				}
+				markdownStartIndex = i;
+				break;
+			}
+
+			const markdown = lines.slice(markdownStartIndex).join('\n').trimStart();
+			if (!markdown) {
+				return null;
+			}
+
+			console.log('Loaded cached analysis result from file.');
+
+			return { markdown, features };
+		} catch (error) {
+			console.error('Failed to load cached analysis result:', error);
+			return null;
+		}
+	}
+
 
 	_loadInitialMockData(webview) {
 		// No initial message needed for scene-based UI
@@ -154,6 +253,17 @@ class ConversationProvider {
 
 	async _startAnalysis(webview) {
 		try {
+			const cachedResult = this._loadCachedAnalysisResult();
+			if (cachedResult) {
+				this._sendAnalysisStep(webview, 'Loading cached analysis result...');
+				webview.postMessage({
+					command: 'analysisComplete',
+					markdown: cachedResult.markdown,
+					features: cachedResult.features || []
+				});
+				return;
+			}
+
 			// Initialize analysis service
 			const analysisService = new AnalysisService(
 				this.openai,
@@ -167,6 +277,9 @@ class ConversationProvider {
 				(step) => this._sendAnalysisStep(webview, step),
 				webview
 			);
+
+			// Save markdown result for subsequent scenes
+			this._cacheAnalysisResult(result.markdown, result.features);
 
 			// Send final result
 			webview.postMessage({
@@ -691,8 +804,8 @@ class ConversationProvider {
 				const fullPath = path.join(dirPath, entry.name);
 				const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
 
-				// Always ignore the cache file to prevent it from affecting the hash
-				if (entry.name === '.kth-analysis-cache.json') {
+				// Always ignore cache files to prevent them from affecting the hash
+				if (entry.name === STAGE1_CACHE_FILENAME || entry.name === RESULT_CACHE_FILENAME) {
 					continue;
 				}
 

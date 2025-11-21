@@ -13,9 +13,15 @@ export function useVSCodeMessaging() {
 					setAnalysisSteps((prev) => [...prev, msg.step]);
 					break;
 				case 'analysisComplete':
-					setAnalysisResult({
+					const result = {
 						markdown: msg.markdown || '',
 						features: msg.features || []
+					};
+					setAnalysisResult(result);
+					vscode?.postMessage({
+						command: 'cacheAnalysisResult',
+						markdown: result.markdown,
+						features: result.features
 					});
 					break;
 				case 'analysisError':

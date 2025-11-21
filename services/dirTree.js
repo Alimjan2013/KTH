@@ -78,8 +78,8 @@ async function readDirectoryTree(dirPath, relativePath, tree, depth, gitignorePa
 			const fullPath = path.join(dirPath, entry.name);
 			const relPath = relativePath ? path.join(relativePath, entry.name) : entry.name;
 			
-			// Always ignore the cache file to prevent it from affecting the hash
-			if (entry.name === '.kth-analysis-cache.json') continue;
+			// Always ignore cache files to prevent them from affecting the hash
+			if (entry.name === '.kth-analysis-cache.json' || entry.name === '.kth-analysis-result-cache.md') continue;
 			
 			if (shouldIgnore(fullPath, relPath, gitignorePatterns)) continue;
 			if (entry.isDirectory()) {

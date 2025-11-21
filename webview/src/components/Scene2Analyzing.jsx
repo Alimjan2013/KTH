@@ -80,7 +80,7 @@ export function Scene2Analyzing({
 								
 							</div>
 						</div>  */}
-            <Streamdown mermaidConfig={mermaidConfig}>
+            <Streamdown >
               {markdownContent}
             </Streamdown>
           </div>
