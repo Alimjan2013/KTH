@@ -422,7 +422,7 @@ class ConversationProvider {
 
 			// Call OpenAI API with tools
 			const response = await this.openai.chat.completions.create({
-				model: 'xai/grok-4-fast-non-reasoning',
+				model: 'xai/grok-4.1-fast-non-reasoning',
 				messages: messages,
 				tools: this._getAvailableTools(),
 				tool_choice: 'auto',
