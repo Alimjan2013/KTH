@@ -25,9 +25,6 @@ export function Scene3ImplementAuth({
   return (
     <div className="h-screen flex flex-col p-6 overflow-y-auto gap-6">
       <header className="flex flex-col gap-2">
-        <p className="uppercase tracking-[0.3em] text-xs text-(--vscode-descriptionForeground)">
-          Scene 3 · Feature Lab
-        </p>
         <h1 className="text-3xl font-semibold text-(--vscode-foreground)">
           Let’s add Auth based on Supabase
         </h1>
@@ -36,59 +33,16 @@ export function Scene3ImplementAuth({
         </p>
       </header>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="col-span-1 bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
-          <h2 className="text-xl font-semibold text-(--vscode-foreground)">Plan Overview</h2>
-          <ol className="space-y-3 text-sm text-(--vscode-foreground)">
-            <li>
-              <span className="font-bold">1.</span> Snapshot the current architecture placeholder for context.
-            </li>
-            <li>
-              <span className="font-bold">2.</span> Compare with the Supabase-enhanced storyboard.
-            </li>
-            <li>
-              <span className="font-bold">3.</span> Apply the code changes list before moving to the guide.
-            </li>
-          </ol>
-          <div className="border-t border-(--vscode-input-border) pt-4 text-sm">
-            <p className="font-semibold mb-1 text-(--vscode-foreground)">Detected features</p>
-            {features.length > 0 ? (
-              <ul className="list-disc ml-5 space-y-1 text-(--vscode-descriptionForeground)">
-                {features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-(--vscode-descriptionForeground)">No feature metadata cached. Re-run analysis if needed.</p>
-            )}
-          </div>
-        </div>
-
-        <div className="col-span-2 bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
-          <h2 className="text-xl font-semibold text-(--vscode-foreground)">Current snapshot (cached)</h2>
-          <img
-            src={ANALYSIS_PLACEHOLDER_IMAGE_URL}
-            alt="Architecture placeholder"
-            className="w-full rounded-lg border border-(--vscode-input-border)"
-          />
-          <p className="text-sm text-(--vscode-descriptionForeground)">
-            This placeholder image represents the high-level architecture captured during analysis.
-          </p>
-        </div>
+      <section className="bg-(--vscode-editor-background)  space-y-4">
+      <h3 className="text-lg font-semibold text-(--vscode-foreground)">Before adding auth</h3>
+              <img
+                src={ANALYSIS_PLACEHOLDER_IMAGE_URL}
+                alt="Architecture placeholder"
+                className="w-full"
+              />
       </section>
 
-      <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
-        <h2 className="text-xl font-semibold text-(--vscode-foreground)">Cached analysis reference</h2>
-        {markdown ? (
-          <div className="prose prose-invert max-w-none">
-            <Streamdown>{markdown}</Streamdown>
-          </div>
-        ) : (
-          <p className="text-(--vscode-descriptionForeground)">No cached analysis result found.</p>
-        )}
-      </section>
-
-      <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
+      <section className="bg-(--vscode-editor-background)  space-y-4">
         <div className="flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-(--vscode-foreground)">After adding auth</h2>
           {authPlan?.loading && (
@@ -102,12 +56,9 @@ export function Scene3ImplementAuth({
           alt="Supabase auth storyboard placeholder"
           className="w-full rounded-lg border border-(--vscode-input-border) bg-white"
         />
-        <p className="text-sm text-(--vscode-descriptionForeground)">
-          Visual placeholder only; follow the instructions below for actual code changes.
-        </p>
       </section>
 
-      <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-5 space-y-4">
+      <section className="bg-(--vscode-editor-background) space-y-4">
         <h2 className="text-xl font-semibold text-(--vscode-foreground)">What will change in code</h2>
         {authPlan?.changeMarkdown ? (
           <div className="prose prose-invert max-w-none">

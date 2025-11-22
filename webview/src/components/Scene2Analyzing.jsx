@@ -36,7 +36,7 @@ export function Scene2Analyzing({
   }, [analysisResult]);
 
   return (
-    <div className="h-screen flex flex-col p-6 overflow-y-auto">
+    <div className="h-screen flex flex-col p-3 overflow-y-auto">
       {/* Analyzing Steps */}
       {!showResult && (
         <div className="flex-1 flex flex-col justify-center max-w-3xl mx-auto w-full">
@@ -82,17 +82,7 @@ export function Scene2Analyzing({
             <Streamdown >
               {markdownContent}
             </Streamdown>
-            <div className="mt-6 space-y-2">
-              <h3 className="text-lg font-semibold text-(--vscode-foreground)">Architecture Snapshot</h3>
-              <img
-                src={ANALYSIS_PLACEHOLDER_IMAGE_URL}
-                alt="Architecture placeholder"
-                className="rounded-lg border border-(--vscode-input-border)"
-              />
-              <p className="text-sm text-(--vscode-descriptionForeground)">
-                Placeholder image shown while the prototype validates the experience.
-              </p>
-            </div>
+          
           </div>
 
           {/* Feature Selection */}
