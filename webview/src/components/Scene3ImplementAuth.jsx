@@ -59,7 +59,6 @@ export function Scene3ImplementAuth({
       </section>
 
       <section className="bg-(--vscode-editor-background) space-y-4">
-        <h2 className="text-xl font-semibold text-(--vscode-foreground)">What will change in code</h2>
         {authPlan?.changeMarkdown ? (
           <div className="prose prose-invert max-w-none">
             <Streamdown>{authPlan.changeMarkdown}</Streamdown>
