@@ -23,7 +23,7 @@ export function Scene3ImplementAuth({
   }, [analysisResult, authPlan?.changeMarkdown, authPlan?.loading, onRequestPlan]);
 
   return (
-    <div className="h-screen flex flex-col p-6 overflow-y-auto gap-6">
+    <div className="h-screen flex flex-col p-2 overflow-y-auto gap-6">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold text-(--vscode-foreground)">
           Let’s add Auth based on Supabase

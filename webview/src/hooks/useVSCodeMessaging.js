@@ -5,6 +5,7 @@ export function useVSCodeMessaging() {
 	const [analysisSteps, setAnalysisSteps] = useState([]);
 	const [analysisResult, setAnalysisResult] = useState(null);
 	const [authPlan, setAuthPlan] = useState({ diagramImageUrl: '', changeMarkdown: '', loading: false });
+	const [envLocalStatus, setEnvLocalStatus] = useState({ exists: false, hasUrl: false, hasKey: false, content: '', loading: false });
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -43,6 +44,30 @@ export function useVSCodeMessaging() {
 					console.error('Auth plan error:', msg.error);
 					setAuthPlan((prev) => ({ ...prev, loading: false }));
 					break;
+				case 'envLocalStatus':
+					setEnvLocalStatus({
+						exists: msg.exists || false,
+						hasUrl: msg.hasUrl || false,
+						hasKey: msg.hasKey || false,
+						content: msg.content || '',
+						loading: false,
+						error: msg.error
+					});
+					break;
+				case 'envLocalUpdated':
+					if (msg.success) {
+						setEnvLocalStatus((prev) => ({ ...prev, loading: true }));
+						vscode?.postMessage({ command: 'checkEnvLocal' });
+					} else {
+						setEnvLocalStatus((prev) => ({ ...prev, loading: false, error: msg.error }));
+					}
+					break;
+				case 'envLocalValidated':
+					setEnvLocalStatus((prev) => ({ ...prev, valid: msg.valid, validationErrors: msg.errors || msg.error }));
+					break;
+				case 'envLocalOpened':
+					setEnvLocalStatus((prev) => ({ ...prev, opened: msg.success, error: msg.error }));
+					break;
 			}
 		};
 		window.addEventListener('message', handler);
@@ -60,7 +85,41 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'generateAuthPlan', feature });
 	}
 
-	return { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan };
+	function openExternalUrl(url) {
+		vscode?.postMessage({ command: 'openExternalUrl', url });
+	}
+
+	function checkEnvLocal() {
+		setEnvLocalStatus((prev) => ({ ...prev, loading: true }));
+		vscode?.postMessage({ command: 'checkEnvLocal' });
+	}
+
+	function updateEnvLocal(url, key) {
+		setEnvLocalStatus((prev) => ({ ...prev, loading: true }));
+		vscode?.postMessage({ command: 'updateEnvLocal', url, key });
+	}
+
+	function validateEnvLocal() {
+		vscode?.postMessage({ command: 'validateEnvLocal' });
+	}
+
+	function openEnvLocal() {
+		vscode?.postMessage({ command: 'openEnvLocal' });
+	}
+
+	return { 
+		startAnalysis, 
+		analysisSteps, 
+		analysisResult, 
+		authPlan, 
+		requestAuthPlan, 
+		openExternalUrl,
+		envLocalStatus,
+		checkEnvLocal,
+		updateEnvLocal,
+		validateEnvLocal,
+		openEnvLocal
+	};
 }
 
 

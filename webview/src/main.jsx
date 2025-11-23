@@ -10,7 +10,7 @@ import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 function App() {
 	const [currentScene, setCurrentScene] = useState(1);
 	const [selectedFeature, setSelectedFeature] = useState(null);
-	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan } = useVSCodeMessaging();
+	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan, openExternalUrl, envLocalStatus, checkEnvLocal, updateEnvLocal, validateEnvLocal, openEnvLocal } = useVSCodeMessaging();
 
 	function handleStartAnalyzing() {
 		setCurrentScene(2);
@@ -49,7 +49,14 @@ function App() {
 				/>
 			)}
 			{currentScene === 4 && (
-				<Scene4Guide onBack={() => setCurrentScene(3)} />
+				<Scene4Guide 
+					onBack={() => setCurrentScene(3)} 
+					openExternalUrl={openExternalUrl}
+					envLocalStatus={envLocalStatus}
+					checkEnvLocal={checkEnvLocal}
+					validateEnvLocal={validateEnvLocal}
+					openEnvLocal={openEnvLocal}
+				/>
 			)}
 		</div>
 	);

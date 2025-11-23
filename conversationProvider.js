@@ -179,9 +179,24 @@ class ConversationProvider {
 					case 'cacheAnalysisResult':
 						this._cacheAnalysisResult(message.markdown, message.features);
 						return;
-					case 'generateAuthPlan':
-						this._generateAuthPlan(message.feature || 'Auth');
-						return;
+				case 'generateAuthPlan':
+					this._generateAuthPlan(message.feature || 'Auth');
+					return;
+				case 'openExternalUrl':
+					this._openExternalUrl(message.url);
+					return;
+				case 'checkEnvLocal':
+					this._checkEnvLocal(webviewView.webview);
+					return;
+				case 'updateEnvLocal':
+					this._updateEnvLocal(webviewView.webview, message.url, message.key);
+					return;
+				case 'validateEnvLocal':
+					this._validateEnvLocal(webviewView.webview);
+					return;
+				case 'openEnvLocal':
+					this._openEnvLocal(webviewView.webview);
+					return;
 				}
 			},
 			null,
@@ -367,6 +382,224 @@ class ConversationProvider {
 
 	_loadInitialMockData(webview) {
 		// No initial message needed for scene-based UI
+	}
+
+	async _openExternalUrl(url) {
+		try {
+			if (!url || typeof url !== 'string') {
+				console.warn('Invalid URL provided for opening:', url);
+				return;
+			}
+			await vscode.env.openExternal(vscode.Uri.parse(url));
+			console.log('Opened external URL:', url);
+		} catch (error) {
+			console.error('Failed to open external URL:', error);
+		}
+	}
+
+	_getEnvLocalPath() {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			return null;
+		}
+		const workspacePath = workspaceFolders[0].uri.fsPath;
+		return path.join(workspacePath, '.env.local');
+	}
+
+	async _checkEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalStatus',
+					exists: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const exists = fs.existsSync(envPath);
+			let hasUrl = false;
+			let hasKey = false;
+			let content = '';
+
+			if (exists) {
+				content = fs.readFileSync(envPath, 'utf8');
+				hasUrl = content.includes('NEXT_PUBLIC_SUPABASE_URL=');
+				hasKey = content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=');
+			}
+
+			webview.postMessage({
+				command: 'envLocalStatus',
+				exists,
+				hasUrl,
+				hasKey,
+				content
+			});
+		} catch (error) {
+			console.error('Failed to check .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalStatus',
+				exists: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _updateEnvLocal(webview, url, key) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalUpdated',
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			let content = '';
+			if (fs.existsSync(envPath)) {
+				content = fs.readFileSync(envPath, 'utf8');
+			}
+
+			// Check if URL variable exists
+			if (!content.includes('NEXT_PUBLIC_SUPABASE_URL=')) {
+				content += (content && !content.endsWith('\n') ? '\n' : '') + `NEXT_PUBLIC_SUPABASE_URL=${url}\n`;
+			} else {
+				// Update existing URL
+				content = content.replace(/NEXT_PUBLIC_SUPABASE_URL=.*/g, `NEXT_PUBLIC_SUPABASE_URL=${url}`);
+			}
+
+			// Check if Key variable exists
+			if (!content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+				content += `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${key}\n`;
+			} else {
+				// Update existing Key
+				content = content.replace(/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=.*/g, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${key}`);
+			}
+
+			fs.writeFileSync(envPath, content, 'utf8');
+
+			webview.postMessage({
+				command: 'envLocalUpdated',
+				success: true
+			});
+		} catch (error) {
+			console.error('Failed to update .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalUpdated',
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _openEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalOpened',
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			// Ensure file exists with variable prefixes
+			if (!fs.existsSync(envPath)) {
+				const content = 'NEXT_PUBLIC_SUPABASE_URL=\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n';
+				fs.writeFileSync(envPath, content, 'utf8');
+			} else {
+				// Check if variables exist, add if missing
+				let content = fs.readFileSync(envPath, 'utf8');
+				if (!content.includes('NEXT_PUBLIC_SUPABASE_URL=')) {
+					content += (content && !content.endsWith('\n') ? '\n' : '') + 'NEXT_PUBLIC_SUPABASE_URL=\n';
+				}
+				if (!content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+					content += 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n';
+				}
+				fs.writeFileSync(envPath, content, 'utf8');
+			}
+
+			// Open file in VS Code editor
+			const uri = vscode.Uri.file(envPath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+
+			webview.postMessage({
+				command: 'envLocalOpened',
+				success: true
+			});
+		} catch (error) {
+			console.error('Failed to open .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalOpened',
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _validateEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath || !fs.existsSync(envPath)) {
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: false,
+					error: '.env.local file does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(envPath, 'utf8');
+			const lines = content.split('\n');
+
+			let urlValue = '';
+			let keyValue = '';
+
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed.startsWith('NEXT_PUBLIC_SUPABASE_URL=')) {
+					urlValue = trimmed.substring('NEXT_PUBLIC_SUPABASE_URL='.length).trim();
+					// Remove quotes if present
+					urlValue = urlValue.replace(/^["']|["']$/g, '');
+				}
+				if (trimmed.startsWith('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+					keyValue = trimmed.substring('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='.length).trim();
+					// Remove quotes if present
+					keyValue = keyValue.replace(/^["']|["']$/g, '');
+				}
+			}
+
+			const urlValid = urlValue.startsWith('https://');
+			const keyValid = keyValue.startsWith('sb_publishable_');
+
+			if (urlValid && keyValid) {
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: true
+				});
+			} else {
+				const errors = [];
+				if (!urlValid) errors.push('URL must start with "https://"');
+				if (!keyValid) errors.push('Key must start with "sb_publishable_"');
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: false,
+					errors
+				});
+			}
+		} catch (error) {
+			console.error('Failed to validate .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalValidated',
+				valid: false,
+				error: error.message
+			});
+		}
 	}
 
 	async _startAnalysis(webview) {

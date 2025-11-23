@@ -36,7 +36,7 @@ export function Scene2Analyzing({
   }, [analysisResult]);
 
   return (
-    <div className="h-screen flex flex-col p-3 overflow-y-auto">
+    <div className="h-screen flex flex-col p-2 overflow-y-auto">
       {/* Analyzing Steps */}
       {!showResult && (
         <div className="flex-1 flex flex-col justify-center max-w-3xl mx-auto w-full">
