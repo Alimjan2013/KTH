@@ -6,6 +6,7 @@ export function useVSCodeMessaging() {
 	const [analysisResult, setAnalysisResult] = useState(null);
 	const [authPlan, setAuthPlan] = useState({ diagramImageUrl: '', changeMarkdown: '', loading: false });
 	const [envLocalStatus, setEnvLocalStatus] = useState({ exists: false, hasUrl: false, hasKey: false, content: '', loading: false });
+	const [packageStatus, setPackageStatus] = useState({ installed: false, hasSupabaseJs: false, hasSupabaseSsr: false, loading: false });
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -68,6 +69,15 @@ export function useVSCodeMessaging() {
 				case 'envLocalOpened':
 					setEnvLocalStatus((prev) => ({ ...prev, opened: msg.success, error: msg.error }));
 					break;
+				case 'supabasePackagesChecked':
+					setPackageStatus({
+						installed: msg.installed || false,
+						hasSupabaseJs: msg.hasSupabaseJs || false,
+						hasSupabaseSsr: msg.hasSupabaseSsr || false,
+						loading: false,
+						error: msg.error
+					});
+					break;
 			}
 		};
 		window.addEventListener('message', handler);
@@ -107,6 +117,11 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'openEnvLocal' });
 	}
 
+	function checkSupabasePackages() {
+		setPackageStatus((prev) => ({ ...prev, loading: true }));
+		vscode?.postMessage({ command: 'checkSupabasePackages' });
+	}
+
 	return { 
 		startAnalysis, 
 		analysisSteps, 
@@ -118,7 +133,9 @@ export function useVSCodeMessaging() {
 		checkEnvLocal,
 		updateEnvLocal,
 		validateEnvLocal,
-		openEnvLocal
+		openEnvLocal,
+		packageStatus,
+		checkSupabasePackages
 	};
 }
 

@@ -197,6 +197,9 @@ class ConversationProvider {
 				case 'openEnvLocal':
 					this._openEnvLocal(webviewView.webview);
 					return;
+				case 'checkSupabasePackages':
+					this._checkSupabasePackages(webviewView.webview);
+					return;
 				}
 			},
 			null,
@@ -597,6 +600,65 @@ class ConversationProvider {
 			webview.postMessage({
 				command: 'envLocalValidated',
 				valid: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkSupabasePackages(webview) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const packageJsonPath = path.join(workspacePath, 'package.json');
+
+			if (!fs.existsSync(packageJsonPath)) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'package.json file not found'
+				});
+				return;
+			}
+
+			const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+			let packageJson;
+			try {
+				packageJson = JSON.parse(packageJsonContent);
+			} catch (parseError) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'Failed to parse package.json'
+				});
+				return;
+			}
+
+			const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+			const hasSupabaseJs = dependencies.hasOwnProperty('@supabase/supabase-js');
+			const hasSupabaseSsr = dependencies.hasOwnProperty('@supabase/ssr');
+
+			const installed = hasSupabaseJs && hasSupabaseSsr;
+
+			webview.postMessage({
+				command: 'supabasePackagesChecked',
+				installed,
+				hasSupabaseJs,
+				hasSupabaseSsr
+			});
+		} catch (error) {
+			console.error('Failed to check Supabase packages:', error);
+			webview.postMessage({
+				command: 'supabasePackagesChecked',
+				installed: false,
 				error: error.message
 			});
 		}

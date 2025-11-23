@@ -10,14 +10,21 @@ export function Scene4Guide({
   envLocalStatus,
   checkEnvLocal,
   validateEnvLocal,
-  openEnvLocal
+  openEnvLocal,
+  packageStatus,
+  checkSupabasePackages
 }) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [step3Checked, setStep3Checked] = useState(false);
 
   useEffect(() => {
     if (currentStep === 2) {
       // Open .env.local file for user to edit
       openEnvLocal?.();
+    }
+    if (currentStep === 3) {
+      // Reset step3Checked when entering step 3
+      setStep3Checked(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
@@ -29,6 +36,11 @@ export function Scene4Guide({
 
   const handleFinished = () => {
     validateEnvLocal();
+  };
+
+  const handleStep3Finished = () => {
+    setStep3Checked(true);
+    checkSupabasePackages();
   };
 
   useEffect(() => {
@@ -134,16 +146,55 @@ export function Scene4Guide({
 
       {/* Step 3 */}
       {currentStep === 3 && (
-        <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-6 space-y-4">
-          <div className="flex items-start gap-4">
-            <div className="shrink-0 w-6 h-6 rounded-full bg-(--vscode-button-background) text-(--vscode-button-foreground) flex items-center justify-center font-bold">
-              3
-            </div>
-            <div className="flex-1">
-              <h4 className="text-base font-semibold text-(--vscode-foreground)">
-                This is step 3
+        <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-2 space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-6 h-6 rounded-full bg-(--vscode-button-background) text-(--vscode-button-foreground) flex items-center justify-center font-bold">
+                3
+              </div>
+              <h4 className="flex-1 text-base font-semibold text-(--vscode-foreground)">
+                Install
               </h4>
             </div>
+
+            <p className="text-(--vscode-descriptionForeground) w-full">
+              Install the @supabase/supabase-js and @supabase/ssr helper packages: 
+            </p>
+
+            <div className="bg-(--vscode-input-background) px-2 py-2 rounded text-sm text-(--vscode-foreground) font-mono">
+              pnpm add @supabase/supabase-js @supabase/ssr
+            </div>
+
+            <p className="text-(--vscode-descriptionForeground) w-full">To use Server-Side Rendering (SSR) with Supabase, you need to configure your Supabase client to use cookies. The @supabase/ssr package helps you do this for your applications.</p>
+
+            <button
+              onClick={handleStep3Finished}
+              className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium"
+            >
+              I finished
+            </button>
+
+            {step3Checked && packageStatus.loading && (
+              <p className="text-sm text-(--vscode-descriptionForeground)">Checking package.json...</p>
+            )}
+
+            {step3Checked && !packageStatus.loading && packageStatus.installed && (
+              <div className="p-3 bg-green-500/20 border border-green-500 rounded text-sm text-green-400">
+                ✓ Packages installed successfully!
+              </div>
+            )}
+
+            {step3Checked && !packageStatus.loading && !packageStatus.installed && packageStatus.hasSupabaseJs !== undefined && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                {packageStatus.error || (
+                  <>
+                    Missing packages:
+                    {!packageStatus.hasSupabaseJs && <div>• @supabase/supabase-js</div>}
+                    {!packageStatus.hasSupabaseSsr && <div>• @supabase/ssr</div>}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}
