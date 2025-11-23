@@ -200,6 +200,15 @@ class ConversationProvider {
 				case 'checkSupabasePackages':
 					this._checkSupabasePackages(webviewView.webview);
 					return;
+				case 'createFile':
+					this._createFile(webviewView.webview, message.path, message.content);
+					return;
+				case 'checkFileExists':
+					this._checkFileExists(webviewView.webview, message.path);
+					return;
+				case 'checkFileNotEmpty':
+					this._checkFileNotEmpty(webviewView.webview, message.path);
+					return;
 				}
 			},
 			null,
@@ -659,6 +668,135 @@ class ConversationProvider {
 			webview.postMessage({
 				command: 'supabasePackagesChecked',
 				installed: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _createFile(webview, filePath, content) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileCreated',
+					path: filePath,
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			// Ensure directory exists
+			const directory = path.dirname(absolutePath);
+			if (!fs.existsSync(directory)) {
+				fs.mkdirSync(directory, { recursive: true });
+			}
+
+			// Only write content if file doesn't exist, effectively creating an empty file if content is empty/null
+			// But here we intentionally just create it. If user wants content, they can paste it.
+			// However, the previous implementation wrote the content. 
+			// The user request is: "only creat empty file , then user can write themself or copy from UI"
+			
+			// Write empty content
+			fs.writeFileSync(absolutePath, '', 'utf8');
+
+			// Open the file
+			const uri = vscode.Uri.file(absolutePath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+
+			webview.postMessage({
+				command: 'fileCreated',
+				path: filePath,
+				success: true
+			});
+		} catch (error) {
+			console.error(`Failed to create file ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileCreated',
+				path: filePath,
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkFileExists(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileExists',
+					path: filePath,
+					exists: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			const exists = fs.existsSync(absolutePath);
+
+			webview.postMessage({
+				command: 'fileExists',
+				path: filePath,
+				exists
+			});
+		} catch (error) {
+			console.error(`Failed to check file ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileExists',
+				path: filePath,
+				exists: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkFileNotEmpty(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileNotEmptyChecked',
+					path: filePath,
+					notEmpty: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			if (!fs.existsSync(absolutePath)) {
+				webview.postMessage({
+					command: 'fileNotEmptyChecked',
+					path: filePath,
+					notEmpty: false,
+					error: 'File does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(absolutePath, 'utf8');
+			const notEmpty = content.trim().length > 0;
+
+			webview.postMessage({
+				command: 'fileNotEmptyChecked',
+				path: filePath,
+				notEmpty
+			});
+		} catch (error) {
+			console.error(`Failed to check file content ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileNotEmptyChecked',
+				path: filePath,
+				notEmpty: false,
 				error: error.message
 			});
 		}

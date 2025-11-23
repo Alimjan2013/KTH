@@ -10,7 +10,7 @@ import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 function App() {
 	const [currentScene, setCurrentScene] = useState(1);
 	const [selectedFeature, setSelectedFeature] = useState(null);
-	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan, openExternalUrl, envLocalStatus, checkEnvLocal, updateEnvLocal, validateEnvLocal, openEnvLocal, packageStatus, checkSupabasePackages } = useVSCodeMessaging();
+	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan, openExternalUrl, envLocalStatus, checkEnvLocal, updateEnvLocal, validateEnvLocal, openEnvLocal, packageStatus, checkSupabasePackages, createFile, checkFileExists, checkFileNotEmpty, fileStatus, setFileStatus } = useVSCodeMessaging();
 
 	function handleStartAnalyzing() {
 		setCurrentScene(2);
@@ -58,6 +58,11 @@ function App() {
 					openEnvLocal={openEnvLocal}
 					packageStatus={packageStatus}
 					checkSupabasePackages={checkSupabasePackages}
+					createFile={createFile}
+					checkFileExists={checkFileExists}
+					checkFileNotEmpty={checkFileNotEmpty}
+					fileStatus={fileStatus}
+					setFileStatus={setFileStatus}
 				/>
 			)}
 		</div>

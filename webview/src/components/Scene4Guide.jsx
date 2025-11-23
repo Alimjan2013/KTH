@@ -4,6 +4,43 @@ const SUPABASE_API_KEYS_URL =
   "https://supabase.com/dashboard/project/pwlhevjeddeyfdevhlfu/settings/api-keys/new";
 const SUPABASE_PROJECT_URL = "https://supabase.com/dashboard/project/pwlhevjeddeyfdevhlfu/settings/api";
 
+const CLIENT_CODE = `import { createBrowserClient } from '@supabase/ssr'
+
+export function createClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+  )
+}`;
+
+const SERVER_CODE = `import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export async function createClient() {
+  const cookieStore = await cookies()
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value }) => cookieStore.set(name, value))
+          } catch {
+            // The \`setAll\` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
+        },
+      },
+    }
+  )
+}`;
+
 export function Scene4Guide({ 
   onBack, 
   openExternalUrl,
@@ -12,10 +49,16 @@ export function Scene4Guide({
   validateEnvLocal,
   openEnvLocal,
   packageStatus,
-  checkSupabasePackages
+  checkSupabasePackages,
+  createFile,
+  checkFileExists,
+  checkFileNotEmpty,
+  fileStatus
 }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [step3Checked, setStep3Checked] = useState(false);
+
+  const [step4Checked, setStep4Checked] = useState(false);
 
   useEffect(() => {
     if (currentStep === 2) {
@@ -26,8 +69,34 @@ export function Scene4Guide({
       // Reset step3Checked when entering step 3
       setStep3Checked(false);
     }
+    if (currentStep === 4) {
+      // Check if files exist when entering step 4
+      checkFileExists?.('utils/supabase/client.ts');
+      checkFileExists?.('utils/supabase/server.ts');
+      setStep4Checked(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
+
+  // Auto-advance to Step 4 on success
+  useEffect(() => {
+    if (step3Checked && packageStatus.installed) {
+      const timer = setTimeout(() => {
+        setCurrentStep(4);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [step3Checked, packageStatus.installed]);
+
+  // Auto-advance to Step 5 on success
+  useEffect(() => {
+    if (step4Checked && fileStatus.clientExists && fileStatus.serverExists && fileStatus.clientNotEmpty && fileStatus.serverNotEmpty) {
+      const timer = setTimeout(() => {
+        setCurrentStep(5);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [step4Checked, fileStatus]);
 
   const handleFindProjectUrl = () => {
     openExternalUrl?.(SUPABASE_PROJECT_URL);
@@ -41,6 +110,31 @@ export function Scene4Guide({
   const handleStep3Finished = () => {
     setStep3Checked(true);
     checkSupabasePackages();
+  };
+
+  const handleStep4Finished = () => {
+    setStep4Checked(true);
+    checkFileExists?.('utils/supabase/client.ts');
+    checkFileExists?.('utils/supabase/server.ts');
+    // Also check if files are empty
+    if (checkFileNotEmpty) {
+      checkFileNotEmpty('utils/supabase/client.ts');
+      checkFileNotEmpty('utils/supabase/server.ts');
+    }
+  };
+
+  const handleCreateClientFile = () => {
+    // Send empty content for empty file creation
+    createFile('utils/supabase/client.ts', '');
+  };
+
+  const handleCreateServerFile = () => {
+    // Send empty content for empty file creation
+    createFile('utils/supabase/server.ts', '');
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
   };
 
   useEffect(() => {
@@ -195,6 +289,122 @@ export function Scene4Guide({
                 )}
               </div>
             )}
+          </div>
+        </section>
+      )}
+
+      {/* Step 4 */}
+      {currentStep === 4 && (
+        <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-2 space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-6 h-6 rounded-full bg-(--vscode-button-background) text-(--vscode-button-foreground) flex items-center justify-center font-bold">
+                4
+              </div>
+              <h4 className="flex-1 text-base font-semibold text-(--vscode-foreground)">
+                Create a client
+              </h4>
+            </div>
+
+            <p className="text-(--vscode-descriptionForeground) w-full">
+              You need setup code to configure a Supabase client to use cookies. Once you have the utility code, you can use the createClient utility functions to get a properly configured Supabase client.
+            </p>
+            
+            <p className="text-(--vscode-descriptionForeground) w-full">
+              Use the browser client in code that runs on the browser, and the server client in code that runs on the server.
+            </p>
+
+            {/* Client Creation Section */}
+            <div className="space-y-2">
+              <button
+                onClick={handleCreateClientFile}
+                disabled={fileStatus?.creatingClient || fileStatus?.clientExists}
+                className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
+              >
+                {fileStatus?.clientExists ? '✓ client.ts created' : 'Create client.ts'}
+              </button>
+              
+              <div className="relative bg-(--vscode-input-background) p-3 rounded text-sm font-mono text-(--vscode-foreground) overflow-x-auto">
+                <button 
+                  onClick={() => copyToClipboard(CLIENT_CODE)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-(--vscode-editor-background) text-(--vscode-descriptionForeground)"
+                  title="Copy to clipboard"
+                >
+                  📋
+                </button>
+                <pre>{CLIENT_CODE}</pre>
+              </div>
+              <p className="text-xs text-(--vscode-descriptionForeground)">
+                Creates: utils/supabase/client.ts
+              </p>
+            </div>
+
+            {/* Server Creation Section */}
+            <div className="space-y-2 pt-4 border-t border-(--vscode-input-border)">
+              <button
+                onClick={handleCreateServerFile}
+                disabled={fileStatus?.creatingServer || fileStatus?.serverExists}
+                className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
+              >
+                 {fileStatus?.serverExists ? '✓ server.ts created' : 'Create server.ts'}
+              </button>
+              
+              <div className="relative bg-(--vscode-input-background) p-3 rounded text-sm font-mono text-(--vscode-foreground) overflow-x-auto">
+                <button 
+                  onClick={() => copyToClipboard(SERVER_CODE)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-(--vscode-editor-background) text-(--vscode-descriptionForeground)"
+                  title="Copy to clipboard"
+                >
+                  📋
+                </button>
+                <pre>{SERVER_CODE}</pre>
+              </div>
+              <p className="text-xs text-(--vscode-descriptionForeground)">
+                Creates: utils/supabase/server.ts
+              </p>
+            </div>
+
+            <button
+              onClick={handleStep4Finished}
+              className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium mt-4"
+            >
+              I finished
+            </button>
+
+            {step4Checked && (!fileStatus.clientExists || !fileStatus.serverExists) && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                Please create both client.ts and server.ts files.
+              </div>
+            )}
+
+            {step4Checked && fileStatus.clientExists && fileStatus.serverExists && (!fileStatus.clientNotEmpty || !fileStatus.serverNotEmpty) && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                Files exist but appear to be empty. Please paste the code into the files and save.
+              </div>
+            )}
+
+            {step4Checked && fileStatus.clientExists && fileStatus.serverExists && fileStatus.clientNotEmpty && fileStatus.serverNotEmpty && (
+              <div className="p-3 bg-green-500/20 border border-green-500 rounded text-sm text-green-400">
+                ✓ Files created and populated!
+              </div>
+            )}
+
+          </div>
+        </section>
+      )}
+
+      {/* Step 5 */}
+      {currentStep === 5 && (
+        <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-2 space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-6 h-6 rounded-full bg-(--vscode-button-background) text-(--vscode-button-foreground) flex items-center justify-center font-bold">
+                5
+              </div>
+              <h4 className="flex-1 text-base font-semibold text-(--vscode-foreground)">
+                Hook up middleware
+              </h4>
+            </div>
           </div>
         </section>
       )}

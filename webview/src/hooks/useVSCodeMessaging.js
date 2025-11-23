@@ -7,6 +7,16 @@ export function useVSCodeMessaging() {
 	const [authPlan, setAuthPlan] = useState({ diagramImageUrl: '', changeMarkdown: '', loading: false });
 	const [envLocalStatus, setEnvLocalStatus] = useState({ exists: false, hasUrl: false, hasKey: false, content: '', loading: false });
 	const [packageStatus, setPackageStatus] = useState({ installed: false, hasSupabaseJs: false, hasSupabaseSsr: false, loading: false });
+	const [fileStatus, setFileStatus] = useState({ 
+		clientExists: false, 
+		serverExists: false, 
+		clientNotEmpty: false,
+		serverNotEmpty: false,
+		loading: false, 
+		creatingClient: false, 
+		creatingServer: false,
+		validationError: null
+	});
 
 	useEffect(() => {
 		const handler = (event) => {
@@ -78,6 +88,27 @@ export function useVSCodeMessaging() {
 						error: msg.error
 					});
 					break;
+				case 'fileCreated':
+					if (msg.path.endsWith('client.ts')) {
+						setFileStatus((prev) => ({ ...prev, clientExists: msg.success, creatingClient: false }));
+					} else if (msg.path.endsWith('server.ts')) {
+						setFileStatus((prev) => ({ ...prev, serverExists: msg.success, creatingServer: false }));
+					}
+					break;
+				case 'fileExists':
+					if (msg.path.endsWith('client.ts')) {
+						setFileStatus((prev) => ({ ...prev, clientExists: msg.exists }));
+					} else if (msg.path.endsWith('server.ts')) {
+						setFileStatus((prev) => ({ ...prev, serverExists: msg.exists }));
+					}
+					break;
+				case 'fileNotEmptyChecked':
+					if (msg.path.endsWith('client.ts')) {
+						setFileStatus((prev) => ({ ...prev, clientNotEmpty: msg.notEmpty }));
+					} else if (msg.path.endsWith('server.ts')) {
+						setFileStatus((prev) => ({ ...prev, serverNotEmpty: msg.notEmpty }));
+					}
+					break;
 			}
 		};
 		window.addEventListener('message', handler);
@@ -122,6 +153,23 @@ export function useVSCodeMessaging() {
 		vscode?.postMessage({ command: 'checkSupabasePackages' });
 	}
 
+	function createFile(path, content) {
+		if (path.endsWith('client.ts')) {
+			setFileStatus((prev) => ({ ...prev, creatingClient: true }));
+		} else if (path.endsWith('server.ts')) {
+			setFileStatus((prev) => ({ ...prev, creatingServer: true }));
+		}
+		vscode?.postMessage({ command: 'createFile', path, content });
+	}
+
+	function checkFileExists(path) {
+		vscode?.postMessage({ command: 'checkFileExists', path });
+	}
+
+	function checkFileNotEmpty(path) {
+		vscode?.postMessage({ command: 'checkFileNotEmpty', path });
+	}
+
 	return { 
 		startAnalysis, 
 		analysisSteps, 
@@ -135,7 +183,12 @@ export function useVSCodeMessaging() {
 		validateEnvLocal,
 		openEnvLocal,
 		packageStatus,
-		checkSupabasePackages
+		checkSupabasePackages,
+		createFile,
+		checkFileExists,
+		checkFileNotEmpty,
+		fileStatus,
+		setFileStatus
 	};
 }
 
