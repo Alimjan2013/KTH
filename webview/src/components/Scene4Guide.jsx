@@ -41,6 +41,51 @@ export async function createClient() {
   )
 }`;
 
+const MIDDLEWARE_CODE = `import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({
+    request,
+  })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({
+            request,
+          })
+          cookiesToSet.forEach(({ name, value }) => supabaseResponse.cookies.set(name, value))
+        },
+      },
+    }
+  )
+
+  const { data } = await supabase.auth.getClaims()
+
+  const user = data?.claims
+
+  if (
+    !user &&
+    !request.nextUrl.pathname.startsWith('/login') &&
+    !request.nextUrl.pathname.startsWith('/auth')
+  ) {
+    // no user, potentially respond by redirecting the user to the login page
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  return supabaseResponse
+}`;
+
 export function Scene4Guide({ 
   onBack, 
   openExternalUrl,
@@ -59,6 +104,17 @@ export function Scene4Guide({
   const [step3Checked, setStep3Checked] = useState(false);
 
   const [step4Checked, setStep4Checked] = useState(false);
+  const [step5Checked, setStep5Checked] = useState(false);
+
+  // Add ref for scrolling
+  const containerRef = React.useRef(null);
+
+  // Scroll to top when step changes
+  useEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [currentStep]);
 
   useEffect(() => {
     if (currentStep === 2) {
@@ -74,6 +130,11 @@ export function Scene4Guide({
       checkFileExists?.('utils/supabase/client.ts');
       checkFileExists?.('utils/supabase/server.ts');
       setStep4Checked(false);
+    }
+    if (currentStep === 5) {
+      // Check if middleware file exists
+      checkFileExists?.('utils/supabase/middleware.ts');
+      setStep5Checked(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep]);
@@ -123,6 +184,15 @@ export function Scene4Guide({
     }
   };
 
+  const handleStep5Finished = () => {
+    // Logic for finishing step 5 (middleware)
+    setStep5Checked(true);
+    checkFileExists?.('utils/supabase/middleware.ts');
+    if (checkFileNotEmpty) {
+      checkFileNotEmpty('utils/supabase/middleware.ts');
+    }
+  };
+
   const handleCreateClientFile = () => {
     // Send empty content for empty file creation
     createFile('utils/supabase/client.ts', '');
@@ -131,6 +201,10 @@ export function Scene4Guide({
   const handleCreateServerFile = () => {
     // Send empty content for empty file creation
     createFile('utils/supabase/server.ts', '');
+  };
+
+  const handleCreateMiddlewareFile = () => {
+    createFile('utils/supabase/middleware.ts', '');
   };
 
   const copyToClipboard = (text) => {
@@ -144,7 +218,7 @@ export function Scene4Guide({
   }, [envLocalStatus.valid]);
 
   return (
-    <div className="h-screen flex flex-col p-2 overflow-y-auto gap-6">
+    <div ref={containerRef} className="h-screen flex flex-col p-2 overflow-y-auto gap-6">
       <header className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold text-(--vscode-foreground)">
           Step-by-Step Supabase Auth Integration
@@ -405,6 +479,69 @@ export function Scene4Guide({
                 Hook up middleware
               </h4>
             </div>
+
+            <div className="space-y-3 text-(--vscode-descriptionForeground) text-sm">
+              <p>
+                Since Next.js Server Components can't write cookies, you need middleware to refresh expired Auth tokens and store them.
+              </p>
+              <p>The middleware is responsible for:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Refreshing the Auth token by calling <code>supabase.auth.getClaims()</code>.</li>
+                <li>Passing the refreshed Auth token to Server Components using <code>request.cookies.set</code>.</li>
+                <li>Passing the refreshed Auth token to the browser using <code>response.cookies.set</code>.</li>
+              </ul>
+            </div>
+
+            {/* Middleware Creation Section */}
+            <div className="space-y-2">
+              <button
+                onClick={handleCreateMiddlewareFile}
+                disabled={fileStatus?.creatingMiddleware || fileStatus?.middlewareExists}
+                className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium disabled:opacity-50"
+              >
+                {fileStatus?.middlewareExists ? '✓ middleware.ts created' : 'Create middleware.ts'}
+              </button>
+              
+              <div className="relative bg-(--vscode-input-background) p-3 rounded text-sm font-mono text-(--vscode-foreground) overflow-x-auto">
+                <button 
+                  onClick={() => copyToClipboard(MIDDLEWARE_CODE)}
+                  className="absolute top-2 right-2 p-1 rounded hover:bg-(--vscode-editor-background) text-(--vscode-descriptionForeground)"
+                  title="Copy to clipboard"
+                >
+                  📋
+                </button>
+                <pre>{MIDDLEWARE_CODE}</pre>
+              </div>
+              <p className="text-xs text-(--vscode-descriptionForeground)">
+                Creates: utils/supabase/middleware.ts
+              </p>
+            </div>
+
+            <button
+              onClick={handleStep5Finished}
+              className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium mt-4"
+            >
+              I finished
+            </button>
+
+            {step5Checked && !fileStatus.middlewareExists && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                Please create the middleware.ts file.
+              </div>
+            )}
+
+            {step5Checked && fileStatus.middlewareExists && !fileStatus.middlewareNotEmpty && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                File exists but appears to be empty. Please paste the code into the file and save.
+              </div>
+            )}
+
+            {step5Checked && fileStatus.middlewareExists && fileStatus.middlewareNotEmpty && (
+              <div className="p-3 bg-green-500/20 border border-green-500 rounded text-sm text-green-400">
+                ✓ Middleware created and populated!
+              </div>
+            )}
+
           </div>
         </section>
       )}

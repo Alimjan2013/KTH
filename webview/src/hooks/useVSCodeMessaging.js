@@ -10,11 +10,14 @@ export function useVSCodeMessaging() {
 	const [fileStatus, setFileStatus] = useState({ 
 		clientExists: false, 
 		serverExists: false, 
+		middlewareExists: false,
 		clientNotEmpty: false,
 		serverNotEmpty: false,
+		middlewareNotEmpty: false,
 		loading: false, 
 		creatingClient: false, 
 		creatingServer: false,
+		creatingMiddleware: false,
 		validationError: null
 	});
 
@@ -93,6 +96,8 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, clientExists: msg.success, creatingClient: false }));
 					} else if (msg.path.endsWith('server.ts')) {
 						setFileStatus((prev) => ({ ...prev, serverExists: msg.success, creatingServer: false }));
+					} else if (msg.path.endsWith('middleware.ts')) {
+						setFileStatus((prev) => ({ ...prev, middlewareExists: msg.success, creatingMiddleware: false }));
 					}
 					break;
 				case 'fileExists':
@@ -100,6 +105,8 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, clientExists: msg.exists }));
 					} else if (msg.path.endsWith('server.ts')) {
 						setFileStatus((prev) => ({ ...prev, serverExists: msg.exists }));
+					} else if (msg.path.endsWith('middleware.ts')) {
+						setFileStatus((prev) => ({ ...prev, middlewareExists: msg.exists }));
 					}
 					break;
 				case 'fileNotEmptyChecked':
@@ -107,6 +114,8 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, clientNotEmpty: msg.notEmpty }));
 					} else if (msg.path.endsWith('server.ts')) {
 						setFileStatus((prev) => ({ ...prev, serverNotEmpty: msg.notEmpty }));
+					} else if (msg.path.endsWith('middleware.ts')) {
+						setFileStatus((prev) => ({ ...prev, middlewareNotEmpty: msg.notEmpty }));
 					}
 					break;
 			}
@@ -158,6 +167,8 @@ export function useVSCodeMessaging() {
 			setFileStatus((prev) => ({ ...prev, creatingClient: true }));
 		} else if (path.endsWith('server.ts')) {
 			setFileStatus((prev) => ({ ...prev, creatingServer: true }));
+		} else if (path.endsWith('middleware.ts')) {
+			setFileStatus((prev) => ({ ...prev, creatingMiddleware: true }));
 		}
 		vscode?.postMessage({ command: 'createFile', path, content });
 	}
