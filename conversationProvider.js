@@ -8,6 +8,37 @@ const prompts = require('./prompts/analysisPrompts');
 
 const STAGE1_CACHE_FILENAME = '.kth-analysis-cache.json';
 const RESULT_CACHE_FILENAME = '.kth-analysis-result-cache.md';
+const AUTH_PLACEHOLDER_IMAGE_URL = 'https://anki.is-ali.tech/kth-figure-2.png';
+const DEFAULT_AUTH_CHANGES_MARKDOWN = `## Implementation Plan (Supabase Auth)
+
+1. **Install & configure**
+   - \`pnpm add @supabase/supabase-js @supabase/auth-helpers-nextjs\`
+   - Create a Supabase project and note the URL + anon/public keys.
+   - Add the keys to \`.env.local\` and wire them through \`next.config.js\` if needed.
+
+2. **Bootstrap auth helpers**
+   - Create \`lib/supabaseClient.ts\` that wraps \`createBrowserSupabaseClient\`.
+   - Add \`SupabaseProvider\` in \`app/layout.tsx\` (client boundary) to share session context.
+
+3. **Public auth routes**
+   - Add \`/app/(auth)/signin/page.tsx\` and \`/signup\` pages that render Supabase UI widgets (or custom forms hitting \`supabase.auth.signInWithPassword\` etc.).
+   - Include magic-link CTA for frictionless onboarding.
+
+4. **Protected areas**
+   - Wrap feature routes (albums, admin) with middleware guard:
+     \`\`\`
+     export const middleware = authMiddleware({ request: { cookies }});
+     export const config = { matcher: ['/albums/:path*', '/admin/:path*'] };
+     \`\`\`
+   - Inside pages/components, call \`const { session } = useSupabase()\` to branch UI.
+
+5. **UI wiring**
+   - Replace the “Auth” button in the navbar with a \`SignIn/SignOut\` dropdown tied to session state.
+   - Show avatar + quick links for authenticated users.
+
+6. **Server actions / RLS**
+   - Move data mutations (upload/delete, like/comment) to Supabase server actions or Edge functions with Row Level Security tied to \`auth.uid()\`.
+   - Update SQL policies to allow content owners to modify their own records.`;
 
 class ConversationProvider {
 	constructor(context) {
@@ -15,6 +46,7 @@ class ConversationProvider {
 		this.conversationHistory = [];
 		this.openaiApiKey = null;
 		this.openai = null;
+		this.latestAnalysisResult = null;
 		this._initializeOpenAI();
 	}
 
@@ -147,6 +179,42 @@ class ConversationProvider {
 					case 'cacheAnalysisResult':
 						this._cacheAnalysisResult(message.markdown, message.features);
 						return;
+				case 'generateAuthPlan':
+					this._generateAuthPlan(message.feature || 'Auth');
+					return;
+				case 'openExternalUrl':
+					this._openExternalUrl(message.url);
+					return;
+				case 'checkEnvLocal':
+					this._checkEnvLocal(webviewView.webview);
+					return;
+				case 'updateEnvLocal':
+					this._updateEnvLocal(webviewView.webview, message.url, message.key);
+					return;
+				case 'validateEnvLocal':
+					this._validateEnvLocal(webviewView.webview);
+					return;
+				case 'openEnvLocal':
+					this._openEnvLocal(webviewView.webview);
+					return;
+				case 'checkSupabasePackages':
+					this._checkSupabasePackages(webviewView.webview);
+					return;
+				case 'createFile':
+					this._createFile(webviewView.webview, message.path, message.content);
+					return;
+				case 'checkFileExists':
+					this._checkFileExists(webviewView.webview, message.path);
+					return;
+				case 'checkFileNotEmpty':
+					this._checkFileNotEmpty(webviewView.webview, message.path);
+					return;
+				case 'openFile':
+					this._openFile(webviewView.webview, message.path);
+					return;
+				case 'checkFileContains':
+					this._checkFileContains(webviewView.webview, message.path, message.searchTerm);
+					return;
 				}
 			},
 			null,
@@ -180,6 +248,10 @@ class ConversationProvider {
 
 			fs.writeFileSync(filePath, fileContent, 'utf8');
 			console.log(`Analysis result cached at ${filePath}`);
+			this.latestAnalysisResult = {
+				markdown: markdownContent,
+				features: safeFeatures
+			};
 		} catch (error) {
 			console.error('Failed to cache analysis result:', error);
 		}
@@ -237,18 +309,573 @@ class ConversationProvider {
 				return null;
 			}
 
+			const result = { markdown, features };
 			console.log('Loaded cached analysis result from file.');
-
-			return { markdown, features };
+			this.latestAnalysisResult = result;
+			return result;
 		} catch (error) {
 			console.error('Failed to load cached analysis result:', error);
 			return null;
 		}
 	}
 
+	async _generateAuthPlan(feature = 'Auth') {
+		if (!this._view) {
+			console.warn('No active webview to send auth plan.');
+			return;
+		}
+
+		const webview = this._view.webview;
+		const analysis = this.latestAnalysisResult || this._loadCachedAnalysisResult();
+
+		if (!analysis || !analysis.markdown) {
+			webview.postMessage({
+				command: 'authPlanError',
+				error: 'No cached analysis found. Please rerun the analysis first.'
+			});
+			return;
+		}
+
+		if (!this.openai) {
+			console.warn('OpenAI unavailable, sending fallback auth plan.');
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
+				changeMarkdown: DEFAULT_AUTH_CHANGES_MARKDOWN
+			});
+			return;
+		}
+
+		try {
+			webview.postMessage({
+				command: 'authPlanLoading',
+				status: 'Generating Supabase auth plan...'
+			});
+
+			const prompt = prompts.getScene3AuthPrompt(analysis.markdown, feature);
+			const response = await this.openai.chat.completions.create({
+				model: 'xai/grok-4.1-fast-non-reasoning',
+				messages: [
+					{
+						role: 'system',
+						content: prompts.getScene3SystemMessage()
+					},
+					{
+						role: 'user',
+						content: prompt
+					}
+				],
+				temperature: 0.4,
+				max_tokens: 4000
+			});
+
+			const messageContent = response.choices[0].message.content || '';
+			let jsonText = messageContent;
+			const fenced = messageContent.match(/```json\s*([\s\S]*?)```/i);
+			if (fenced) {
+				jsonText = fenced[1];
+			}
+
+			const parsed = JSON.parse(jsonText.trim());
+
+			const changeMarkdown = parsed.changeMarkdown && parsed.changeMarkdown.trim().length > 0
+				? parsed.changeMarkdown
+				: DEFAULT_AUTH_CHANGES_MARKDOWN;
+
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
+				changeMarkdown
+			});
+		} catch (error) {
+			console.error('Failed to generate auth plan:', error);
+			webview.postMessage({
+				command: 'authPlanGenerated',
+				diagramImageUrl: AUTH_PLACEHOLDER_IMAGE_URL,
+				changeMarkdown: `${DEFAULT_AUTH_CHANGES_MARKDOWN}\n\n> Fallback used because generation failed: ${error.message}`
+			});
+		}
+	}
+
 
 	_loadInitialMockData(webview) {
 		// No initial message needed for scene-based UI
+	}
+
+	async _openExternalUrl(url) {
+		try {
+			if (!url || typeof url !== 'string') {
+				console.warn('Invalid URL provided for opening:', url);
+				return;
+			}
+			await vscode.env.openExternal(vscode.Uri.parse(url));
+			console.log('Opened external URL:', url);
+		} catch (error) {
+			console.error('Failed to open external URL:', error);
+		}
+	}
+
+	_getEnvLocalPath() {
+		const workspaceFolders = vscode.workspace.workspaceFolders;
+		if (!workspaceFolders || workspaceFolders.length === 0) {
+			return null;
+		}
+		const workspacePath = workspaceFolders[0].uri.fsPath;
+		return path.join(workspacePath, '.env.local');
+	}
+
+	async _checkEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalStatus',
+					exists: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const exists = fs.existsSync(envPath);
+			let hasUrl = false;
+			let hasKey = false;
+			let content = '';
+
+			if (exists) {
+				content = fs.readFileSync(envPath, 'utf8');
+				hasUrl = content.includes('NEXT_PUBLIC_SUPABASE_URL=');
+				hasKey = content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=');
+			}
+
+			webview.postMessage({
+				command: 'envLocalStatus',
+				exists,
+				hasUrl,
+				hasKey,
+				content
+			});
+		} catch (error) {
+			console.error('Failed to check .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalStatus',
+				exists: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _updateEnvLocal(webview, url, key) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalUpdated',
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			let content = '';
+			if (fs.existsSync(envPath)) {
+				content = fs.readFileSync(envPath, 'utf8');
+			}
+
+			// Check if URL variable exists
+			if (!content.includes('NEXT_PUBLIC_SUPABASE_URL=')) {
+				content += (content && !content.endsWith('\n') ? '\n' : '') + `NEXT_PUBLIC_SUPABASE_URL=${url}\n`;
+			} else {
+				// Update existing URL
+				content = content.replace(/NEXT_PUBLIC_SUPABASE_URL=.*/g, `NEXT_PUBLIC_SUPABASE_URL=${url}`);
+			}
+
+			// Check if Key variable exists
+			if (!content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+				content += `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${key}\n`;
+			} else {
+				// Update existing Key
+				content = content.replace(/NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=.*/g, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${key}`);
+			}
+
+			fs.writeFileSync(envPath, content, 'utf8');
+
+			webview.postMessage({
+				command: 'envLocalUpdated',
+				success: true
+			});
+		} catch (error) {
+			console.error('Failed to update .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalUpdated',
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _openEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath) {
+				webview.postMessage({
+					command: 'envLocalOpened',
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			// Ensure file exists with variable prefixes
+			if (!fs.existsSync(envPath)) {
+				const content = 'NEXT_PUBLIC_SUPABASE_URL=\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n';
+				fs.writeFileSync(envPath, content, 'utf8');
+			} else {
+				// Check if variables exist, add if missing
+				let content = fs.readFileSync(envPath, 'utf8');
+				if (!content.includes('NEXT_PUBLIC_SUPABASE_URL=')) {
+					content += (content && !content.endsWith('\n') ? '\n' : '') + 'NEXT_PUBLIC_SUPABASE_URL=\n';
+				}
+				if (!content.includes('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+					content += 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\n';
+				}
+				fs.writeFileSync(envPath, content, 'utf8');
+			}
+
+			// Open file in VS Code editor
+			const uri = vscode.Uri.file(envPath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+
+			webview.postMessage({
+				command: 'envLocalOpened',
+				success: true
+			});
+		} catch (error) {
+			console.error('Failed to open .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalOpened',
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _validateEnvLocal(webview) {
+		try {
+			const envPath = this._getEnvLocalPath();
+			if (!envPath || !fs.existsSync(envPath)) {
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: false,
+					error: '.env.local file does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(envPath, 'utf8');
+			const lines = content.split('\n');
+
+			let urlValue = '';
+			let keyValue = '';
+
+			for (const line of lines) {
+				const trimmed = line.trim();
+				if (trimmed.startsWith('NEXT_PUBLIC_SUPABASE_URL=')) {
+					urlValue = trimmed.substring('NEXT_PUBLIC_SUPABASE_URL='.length).trim();
+					// Remove quotes if present
+					urlValue = urlValue.replace(/^["']|["']$/g, '');
+				}
+				if (trimmed.startsWith('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=')) {
+					keyValue = trimmed.substring('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY='.length).trim();
+					// Remove quotes if present
+					keyValue = keyValue.replace(/^["']|["']$/g, '');
+				}
+			}
+
+			const urlValid = urlValue.startsWith('https://');
+			const keyValid = keyValue.startsWith('sb_publishable_');
+
+			if (urlValid && keyValid) {
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: true
+				});
+			} else {
+				const errors = [];
+				if (!urlValid) errors.push('URL must start with "https://"');
+				if (!keyValid) errors.push('Key must start with "sb_publishable_"');
+				webview.postMessage({
+					command: 'envLocalValidated',
+					valid: false,
+					errors
+				});
+			}
+		} catch (error) {
+			console.error('Failed to validate .env.local:', error);
+			webview.postMessage({
+				command: 'envLocalValidated',
+				valid: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkSupabasePackages(webview) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const packageJsonPath = path.join(workspacePath, 'package.json');
+
+			if (!fs.existsSync(packageJsonPath)) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'package.json file not found'
+				});
+				return;
+			}
+
+			const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+			let packageJson;
+			try {
+				packageJson = JSON.parse(packageJsonContent);
+			} catch (parseError) {
+				webview.postMessage({
+					command: 'supabasePackagesChecked',
+					installed: false,
+					error: 'Failed to parse package.json'
+				});
+				return;
+			}
+
+			const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies };
+			const hasSupabaseJs = dependencies.hasOwnProperty('@supabase/supabase-js');
+			const hasSupabaseSsr = dependencies.hasOwnProperty('@supabase/ssr');
+
+			const installed = hasSupabaseJs && hasSupabaseSsr;
+
+			webview.postMessage({
+				command: 'supabasePackagesChecked',
+				installed,
+				hasSupabaseJs,
+				hasSupabaseSsr
+			});
+		} catch (error) {
+			console.error('Failed to check Supabase packages:', error);
+			webview.postMessage({
+				command: 'supabasePackagesChecked',
+				installed: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _createFile(webview, filePath, content) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileCreated',
+					path: filePath,
+					success: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			// Ensure directory exists
+			const directory = path.dirname(absolutePath);
+			if (!fs.existsSync(directory)) {
+				fs.mkdirSync(directory, { recursive: true });
+			}
+
+			// Only write content if file doesn't exist, effectively creating an empty file if content is empty/null
+			// But here we intentionally just create it. If user wants content, they can paste it.
+			// However, the previous implementation wrote the content. 
+			// The user request is: "only creat empty file , then user can write themself or copy from UI"
+			
+			// Write empty content
+			fs.writeFileSync(absolutePath, '', 'utf8');
+
+			// Open the file
+			const uri = vscode.Uri.file(absolutePath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+
+			webview.postMessage({
+				command: 'fileCreated',
+				path: filePath,
+				success: true
+			});
+		} catch (error) {
+			console.error(`Failed to create file ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileCreated',
+				path: filePath,
+				success: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkFileExists(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileExists',
+					path: filePath,
+					exists: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			const exists = fs.existsSync(absolutePath);
+
+			webview.postMessage({
+				command: 'fileExists',
+				path: filePath,
+				exists
+			});
+		} catch (error) {
+			console.error(`Failed to check file ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileExists',
+				path: filePath,
+				exists: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _checkFileNotEmpty(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileNotEmptyChecked',
+					path: filePath,
+					notEmpty: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			if (!fs.existsSync(absolutePath)) {
+				webview.postMessage({
+					command: 'fileNotEmptyChecked',
+					path: filePath,
+					notEmpty: false,
+					error: 'File does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(absolutePath, 'utf8');
+			const notEmpty = content.trim().length > 0;
+
+			webview.postMessage({
+				command: 'fileNotEmptyChecked',
+				path: filePath,
+				notEmpty
+			});
+		} catch (error) {
+			console.error(`Failed to check file content ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileNotEmptyChecked',
+				path: filePath,
+				notEmpty: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _openFile(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				console.warn('Cannot open file: no workspace is open.');
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+
+			if (!fs.existsSync(absolutePath)) {
+				console.warn(`Cannot open file: ${filePath} does not exist.`);
+				return;
+			}
+
+			const uri = vscode.Uri.file(absolutePath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+			console.log(`Opened file: ${filePath}`);
+		} catch (error) {
+			console.error(`Failed to open file ${filePath}:`, error);
+		}
+	}
+
+	async _checkFileContains(webview, filePath, searchTerm) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileContainsChecked',
+					path: filePath,
+					contains: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			if (!fs.existsSync(absolutePath)) {
+				webview.postMessage({
+					command: 'fileContainsChecked',
+					path: filePath,
+					contains: false,
+					error: 'File does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(absolutePath, 'utf8');
+			const contains = content.includes(searchTerm);
+
+			webview.postMessage({
+				command: 'fileContainsChecked',
+				path: filePath,
+				contains
+			});
+		} catch (error) {
+			console.error(`Failed to check file content ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileContainsChecked',
+				path: filePath,
+				contains: false,
+				error: error.message
+			});
+		}
 	}
 
 	async _startAnalysis(webview) {
@@ -261,6 +888,7 @@ class ConversationProvider {
 					markdown: cachedResult.markdown,
 					features: cachedResult.features || []
 				});
+				this.latestAnalysisResult = cachedResult;
 				return;
 			}
 

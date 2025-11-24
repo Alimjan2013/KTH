@@ -70,38 +70,16 @@ Remember: Use tools FIRST, then provide the JSON analysis.`;
 		let prompt = `You are analyzing a codebase. Below is information about the codebase structure, files, and dependencies.
 
 YOUR TASK: Create a polished markdown response based on this information that includes:
-1. A polished, concise description (2-3 sentences) of what type of project this is
-2. A SIMPLE feature-based mermaid diagram showing the main features or pages
+1. A polished, concise description (2-3 sentences) of what type of project this is.
+2. A list of notable features or flows.
+3. An "Architecture Snapshot" section that embeds the following placeholder image using standard markdown syntax:
 
-IMPORTANT: 
-- You MUST analyze the codebase using the information provided below
-- Create a FEATURE-BASED diagram (NOT a directory tree). Show main features or pages.
-- Respond in MARKDOWN format (not JSON)
-- Include the mermaid diagram in a markdown code block with language "mermaid"
-- Use proper markdown formatting for headings, lists, etc.
-- KEEP THE MERMAID DIAGRAM SIMPLE - use basic syntax only, avoid complex features
+![Architecture Placeholder](https://anki.is-ali.tech/kth-figure-1.png)
 
-MERMAID RULES (CRITICAL - FOLLOW THESE EXACTLY):
-- Use simple graph syntax: graph TD or graph LR
-- Use simple node labels: A[Label] or B[Feature Name]
-- Use simple connections: A --> B
-- NO special characters in labels (no quotes, no brackets inside brackets, no line breaks)
-- NO subgraphs with direction
-- NO complex styling
-- Keep node IDs simple (single letters or simple words)
-- Maximum 10-15 nodes total
-
-Example mermaid format (SIMPLE):
-\`\`\`mermaid
-graph TD
-    A[Home Page]
-    B[Albums Page]
-    C[Admin Page]
-    D[Image Gallery]
-    A --> B
-    B --> D
-    C --> D
-\`\`\`
+IMPORTANT:
+- Do NOT generate mermaid diagrams for now; the screenshot above acts as the visual placeholder.
+- Respond in MARKDOWN format (not JSON).
+- Use proper markdown headings and bullet lists.
 
 Example markdown structure:
 # Project Analysis
@@ -113,11 +91,9 @@ Example markdown structure:
 - Feature 1
 - Feature 2
 
-## Architecture Diagram
+## Architecture Snapshot
 
-\`\`\`mermaid
-[Your mermaid diagram here]
-\`\`\`
+![Architecture Placeholder](https://anki.is-ali.tech/kth-figure-1.png)
 
 === DETAILED CODEBASE ANALYSIS FROM STAGE 1 ===
 
@@ -163,7 +139,33 @@ ${detailedAnalysis}
 	 * System message for Stage 2 polishing
 	 */
 	getStage2SystemMessage() {
-		return 'You are an expert at creating polished codebase summaries and SIMPLE mermaid diagrams. Create well-formatted markdown responses with SIMPLE mermaid diagrams that show main features or pages. Use ONLY basic mermaid syntax: graph TD/LR, simple node labels like A[Label], and simple connections like A --> B. NO subgraphs, NO special characters, NO complex styling. Keep diagrams simple and error-free. DO NOT create directory tree structures. Always format mermaid diagrams in markdown code blocks with language "mermaid".';
+		return 'You are an expert at creating polished codebase summaries. Produce well-formatted markdown with concise descriptions, bullet lists, and an "Architecture Snapshot" section that embeds the provided placeholder image instead of generating mermaid diagrams.';
+	},
+
+	getScene3AuthPrompt(analysisMarkdown, feature = 'Auth') {
+		return `You are designing a storyboard for extending an existing Next.js application with Supabase-based ${feature} functionality.
+
+INPUT ANALYSIS (markdown from Stage 2):
+${analysisMarkdown}
+
+TASKS:
+1. Acknowledge that the visual storyboard will be represented by this static image inside the UI (do NOT generate HTML yourself): https://anki.is-ali.tech/kth-figure-2.png
+2. Produce a concise markdown section describing what parts of the codebase must change (files to add/edit, libraries to install, routing/middleware updates, UI hooks). Prefer actionable bullet lists grouped by theme.
+
+OUTPUT FORMAT (JSON ONLY, no code fences):
+{
+  "changeMarkdown": "## What will change\\n- ... bullet list ..."
+}
+
+RULES:
+- Do NOT wrap the JSON in triple backticks.
+- \`changeMarkdown\` must be valid markdown (headings + bullets).
+- Focus on Supabase auth primitives: signup/login, session provider, protected routes, admin gating.
+- If input analysis lacks details, make reasonable assumptions but call them out explicitly.`;
+	},
+
+	getScene3SystemMessage() {
+		return 'You are a product-minded staff engineer helping storyboard feature additions. The UI already has a static illustration, so focus on concise markdown implementation notes only. Always respond with valid JSON that includes "changeMarkdown".';
 	},
 
 	/**

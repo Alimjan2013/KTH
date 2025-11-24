@@ -1,7 +1,7 @@
 {
   "name": "kth-webview",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.3.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,6 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "4.1.16",
-    "vite": "7.1.12"
+    "vite": "7.2.0"
   }
 }
