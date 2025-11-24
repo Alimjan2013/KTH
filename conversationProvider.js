@@ -209,6 +209,12 @@ class ConversationProvider {
 				case 'checkFileNotEmpty':
 					this._checkFileNotEmpty(webviewView.webview, message.path);
 					return;
+				case 'openFile':
+					this._openFile(webviewView.webview, message.path);
+					return;
+				case 'checkFileContains':
+					this._checkFileContains(webviewView.webview, message.path, message.searchTerm);
+					return;
 				}
 			},
 			null,
@@ -797,6 +803,76 @@ class ConversationProvider {
 				command: 'fileNotEmptyChecked',
 				path: filePath,
 				notEmpty: false,
+				error: error.message
+			});
+		}
+	}
+
+	async _openFile(webview, filePath) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				console.warn('Cannot open file: no workspace is open.');
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+
+			if (!fs.existsSync(absolutePath)) {
+				console.warn(`Cannot open file: ${filePath} does not exist.`);
+				return;
+			}
+
+			const uri = vscode.Uri.file(absolutePath);
+			const document = await vscode.workspace.openTextDocument(uri);
+			await vscode.window.showTextDocument(document);
+			console.log(`Opened file: ${filePath}`);
+		} catch (error) {
+			console.error(`Failed to open file ${filePath}:`, error);
+		}
+	}
+
+	async _checkFileContains(webview, filePath, searchTerm) {
+		try {
+			const workspaceFolders = vscode.workspace.workspaceFolders;
+			if (!workspaceFolders || workspaceFolders.length === 0) {
+				webview.postMessage({
+					command: 'fileContainsChecked',
+					path: filePath,
+					contains: false,
+					error: 'No workspace folder is open'
+				});
+				return;
+			}
+
+			const workspacePath = workspaceFolders[0].uri.fsPath;
+			const absolutePath = path.join(workspacePath, filePath);
+			
+			if (!fs.existsSync(absolutePath)) {
+				webview.postMessage({
+					command: 'fileContainsChecked',
+					path: filePath,
+					contains: false,
+					error: 'File does not exist'
+				});
+				return;
+			}
+
+			const content = fs.readFileSync(absolutePath, 'utf8');
+			const contains = content.includes(searchTerm);
+
+			webview.postMessage({
+				command: 'fileContainsChecked',
+				path: filePath,
+				contains
+			});
+		} catch (error) {
+			console.error(`Failed to check file content ${filePath}:`, error);
+			webview.postMessage({
+				command: 'fileContainsChecked',
+				path: filePath,
+				contains: false,
 				error: error.message
 			});
 		}

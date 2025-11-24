@@ -88,6 +88,7 @@ export async function updateSession(request: NextRequest) {
 
 export function Scene4Guide({ 
   onBack, 
+  onNext,
   openExternalUrl,
   envLocalStatus,
   checkEnvLocal,
@@ -158,6 +159,16 @@ export function Scene4Guide({
       return () => clearTimeout(timer);
     }
   }, [step4Checked, fileStatus]);
+
+  // Auto-advance to Scene 5 on success
+  useEffect(() => {
+    if (step5Checked && fileStatus.middlewareExists && fileStatus.middlewareNotEmpty) {
+      const timer = setTimeout(() => {
+        onNext();
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [step5Checked, fileStatus, onNext]);
 
   const handleFindProjectUrl = () => {
     openExternalUrl?.(SUPABASE_PROJECT_URL);

@@ -5,12 +5,13 @@ import { Scene1Greeting } from './components/Scene1Greeting.jsx';
 import { Scene2Analyzing } from './components/Scene2Analyzing.jsx';
 import { Scene3ImplementAuth } from './components/Scene3ImplementAuth.jsx';
 import { Scene4Guide } from './components/Scene4Guide.jsx';
+import { Scene5BuildUI } from './components/Scene5BuildUI.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
 	const [currentScene, setCurrentScene] = useState(1);
 	const [selectedFeature, setSelectedFeature] = useState(null);
-	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan, openExternalUrl, envLocalStatus, checkEnvLocal, updateEnvLocal, validateEnvLocal, openEnvLocal, packageStatus, checkSupabasePackages, createFile, checkFileExists, checkFileNotEmpty, fileStatus, setFileStatus } = useVSCodeMessaging();
+	const { startAnalysis, analysisSteps, analysisResult, authPlan, requestAuthPlan, openExternalUrl, envLocalStatus, checkEnvLocal, updateEnvLocal, validateEnvLocal, openEnvLocal, packageStatus, checkSupabasePackages, createFile, checkFileExists, checkFileNotEmpty, openFile, fileStatus, setFileStatus } = useVSCodeMessaging();
 
 	function handleStartAnalyzing() {
 		setCurrentScene(2);
@@ -26,6 +27,10 @@ function App() {
 
 	function handleGuide() {
 		setCurrentScene(4);
+	}
+
+	function handleScene5() {
+		setCurrentScene(5);
 	}
 
 	return (
@@ -51,6 +56,7 @@ function App() {
 			{currentScene === 4 && (
 				<Scene4Guide 
 					onBack={() => setCurrentScene(3)} 
+					onNext={handleScene5}
 					openExternalUrl={openExternalUrl}
 					envLocalStatus={envLocalStatus}
 					checkEnvLocal={checkEnvLocal}
@@ -63,6 +69,16 @@ function App() {
 					checkFileNotEmpty={checkFileNotEmpty}
 					fileStatus={fileStatus}
 					setFileStatus={setFileStatus}
+				/>
+			)}
+			{currentScene === 5 && (
+				<Scene5BuildUI 
+					onBack={() => setCurrentScene(4)} 
+					createFile={createFile}
+					checkFileExists={checkFileExists}
+					checkFileNotEmpty={checkFileNotEmpty}
+					openFile={openFile}
+					fileStatus={fileStatus}
 				/>
 			)}
 		</div>

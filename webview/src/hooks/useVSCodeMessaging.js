@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 
 export function useVSCodeMessaging() {
 	const vscode = useMemo(() => (typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null), []);
@@ -11,13 +11,19 @@ export function useVSCodeMessaging() {
 		clientExists: false, 
 		serverExists: false, 
 		middlewareExists: false,
+		signupPageExists: false,
+		loginPageExists: false,
 		clientNotEmpty: false,
 		serverNotEmpty: false,
 		middlewareNotEmpty: false,
+		signupPageNotEmpty: false,
+		loginPageNotEmpty: false,
 		loading: false, 
 		creatingClient: false, 
 		creatingServer: false,
 		creatingMiddleware: false,
+		creatingSignupPage: false,
+		creatingLoginPage: false,
 		validationError: null
 	});
 
@@ -98,6 +104,10 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, serverExists: msg.success, creatingServer: false }));
 					} else if (msg.path.endsWith('middleware.ts')) {
 						setFileStatus((prev) => ({ ...prev, middlewareExists: msg.success, creatingMiddleware: false }));
+					} else if (msg.path.endsWith('app/auth/signup/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, signupPageExists: msg.success, creatingSignupPage: false }));
+					} else if (msg.path.endsWith('app/auth/login/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, loginPageExists: msg.success, creatingLoginPage: false }));
 					}
 					break;
 				case 'fileExists':
@@ -107,6 +117,10 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, serverExists: msg.exists }));
 					} else if (msg.path.endsWith('middleware.ts')) {
 						setFileStatus((prev) => ({ ...prev, middlewareExists: msg.exists }));
+					} else if (msg.path.endsWith('app/auth/signup/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, signupPageExists: msg.exists }));
+					} else if (msg.path.endsWith('app/auth/login/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, loginPageExists: msg.exists }));
 					}
 					break;
 				case 'fileNotEmptyChecked':
@@ -116,70 +130,82 @@ export function useVSCodeMessaging() {
 						setFileStatus((prev) => ({ ...prev, serverNotEmpty: msg.notEmpty }));
 					} else if (msg.path.endsWith('middleware.ts')) {
 						setFileStatus((prev) => ({ ...prev, middlewareNotEmpty: msg.notEmpty }));
+					} else if (msg.path.endsWith('app/auth/signup/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, signupPageNotEmpty: msg.notEmpty }));
+					} else if (msg.path.endsWith('app/auth/login/page.tsx')) {
+						setFileStatus((prev) => ({ ...prev, loginPageNotEmpty: msg.notEmpty }));
 					}
 					break;
 			}
 		};
 		window.addEventListener('message', handler);
 		return () => window.removeEventListener('message', handler);
-	}, []);
+	}, [vscode]);
 
-	function startAnalysis() {
+	const startAnalysis = useCallback(() => {
 		setAnalysisSteps([]);
 		setAnalysisResult(null);
 		vscode?.postMessage({ command: 'startAnalysis' });
-	}
+	}, [vscode]);
 
-	function requestAuthPlan(feature = 'Auth') {
+	const requestAuthPlan = useCallback((feature = 'Auth') => {
 		setAuthPlan((prev) => ({ ...prev, loading: true }));
 		vscode?.postMessage({ command: 'generateAuthPlan', feature });
-	}
+	}, [vscode]);
 
-	function openExternalUrl(url) {
+	const openExternalUrl = useCallback((url) => {
 		vscode?.postMessage({ command: 'openExternalUrl', url });
-	}
+	}, [vscode]);
 
-	function checkEnvLocal() {
+	const checkEnvLocal = useCallback(() => {
 		setEnvLocalStatus((prev) => ({ ...prev, loading: true }));
 		vscode?.postMessage({ command: 'checkEnvLocal' });
-	}
+	}, [vscode]);
 
-	function updateEnvLocal(url, key) {
+	const updateEnvLocal = useCallback((url, key) => {
 		setEnvLocalStatus((prev) => ({ ...prev, loading: true }));
 		vscode?.postMessage({ command: 'updateEnvLocal', url, key });
-	}
+	}, [vscode]);
 
-	function validateEnvLocal() {
+	const validateEnvLocal = useCallback(() => {
 		vscode?.postMessage({ command: 'validateEnvLocal' });
-	}
+	}, [vscode]);
 
-	function openEnvLocal() {
+	const openEnvLocal = useCallback(() => {
 		vscode?.postMessage({ command: 'openEnvLocal' });
-	}
+	}, [vscode]);
 
-	function checkSupabasePackages() {
+	const checkSupabasePackages = useCallback(() => {
 		setPackageStatus((prev) => ({ ...prev, loading: true }));
 		vscode?.postMessage({ command: 'checkSupabasePackages' });
-	}
+	}, [vscode]);
 
-	function createFile(path, content) {
+	const createFile = useCallback((path, content) => {
 		if (path.endsWith('client.ts')) {
 			setFileStatus((prev) => ({ ...prev, creatingClient: true }));
 		} else if (path.endsWith('server.ts')) {
 			setFileStatus((prev) => ({ ...prev, creatingServer: true }));
 		} else if (path.endsWith('middleware.ts')) {
 			setFileStatus((prev) => ({ ...prev, creatingMiddleware: true }));
+		} else if (path.endsWith('app/auth/signup/page.tsx')) {
+			setFileStatus((prev) => ({ ...prev, creatingSignupPage: true }));
+		} else if (path.endsWith('app/auth/login/page.tsx')) {
+			setFileStatus((prev) => ({ ...prev, creatingLoginPage: true }));
 		}
 		vscode?.postMessage({ command: 'createFile', path, content });
-	}
+	}, [vscode]);
 
-	function checkFileExists(path) {
+	const checkFileExists = useCallback((path) => {
 		vscode?.postMessage({ command: 'checkFileExists', path });
-	}
+	}, [vscode]);
 
-	function checkFileNotEmpty(path) {
+	const checkFileNotEmpty = useCallback((path) => {
 		vscode?.postMessage({ command: 'checkFileNotEmpty', path });
-	}
+	}, [vscode]);
+
+	const openFile = useCallback((path) => {
+		vscode?.postMessage({ command: 'openFile', path });
+	}, [vscode]);
 
 	return { 
 		startAnalysis, 
@@ -198,6 +224,7 @@ export function useVSCodeMessaging() {
 		createFile,
 		checkFileExists,
 		checkFileNotEmpty,
+		openFile,
 		fileStatus,
 		setFileStatus
 	};
