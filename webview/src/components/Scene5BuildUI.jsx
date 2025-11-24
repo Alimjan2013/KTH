@@ -166,12 +166,56 @@ export default function LoginPage() {
   );
 }`;
 
-export function Scene5BuildUI({ onBack, createFile, checkFileExists, checkFileNotEmpty, openFile, fileStatus }) {
+const AUTH_PLACEHOLDER_IMAGE_URL = 'https://anki.is-ali.tech/kth-figure-2.png';
+
+const MIDDLEWARE_CODE = `import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
+
+const PUBLIC_PATHS = ['/', '/login']
+
+export async function updateSession(request: NextRequest) {
+  let supabaseResponse = NextResponse.next({ request })
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value }) => supabaseResponse.cookies.set(name, value))
+        },
+      },
+    }
+  )
+
+  const { data } = await supabase.auth.getClaims()
+  const user = data?.claims
+
+  const pathname = request.nextUrl.pathname
+  const isAuthRoute = pathname.startsWith('/auth')
+  const isPublic = PUBLIC_PATHS.includes(pathname) || isAuthRoute
+
+  if (!user && !isPublic) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  return supabaseResponse
+}`;
+
+export function Scene5BuildUI({ onBack, onNext, createFile, checkFileExists, checkFileNotEmpty, openFile, fileStatus }) {
   const [currentStep, setCurrentStep] = useState(1);
   const [step1Checked, setStep1Checked] = useState(false);
   const [step2Checked, setStep2Checked] = useState(false);
   const [step3Checked, setStep3Checked] = useState(false);
   const [step4Checked, setStep4Checked] = useState(false);
+  const [step5Checked, setStep5Checked] = useState(false);
   const containerRef = useRef(null);
 
   const copyToClipboard = (text) => navigator.clipboard.writeText(text);
@@ -190,6 +234,10 @@ export function Scene5BuildUI({ onBack, createFile, checkFileExists, checkFileNo
     } else if (currentStep === 4) {
       setStep4Checked(false);
       checkFileNotEmpty?.('app/auth/login/page.tsx');
+    } else if (currentStep === 5) {
+      setStep5Checked(false);
+      checkFileExists?.('utils/supabase/middleware.ts');
+      checkFileNotEmpty?.('utils/supabase/middleware.ts');
     }
   }, [currentStep, checkFileExists, checkFileNotEmpty]);
 
@@ -227,6 +275,11 @@ export function Scene5BuildUI({ onBack, createFile, checkFileExists, checkFileNo
     checkFileNotEmpty?.('app/auth/login/page.tsx');
   };
 
+  const handleStep5Finished = () => {
+    setStep5Checked(true);
+    checkFileNotEmpty?.('utils/supabase/middleware.ts');
+  };
+
   // Auto-advance to Step 2
   useEffect(() => {
     if (step1Checked && fileStatus?.signupPageExists) {
@@ -256,6 +309,25 @@ export function Scene5BuildUI({ onBack, createFile, checkFileExists, checkFileNo
       return () => clearTimeout(timer);
     }
   }, [step3Checked, fileStatus?.signupPageNotEmpty]);
+
+  // Auto-advance to Step 5
+  useEffect(() => {
+    if (step4Checked && fileStatus?.loginPageNotEmpty) {
+      const timer = setTimeout(() => {
+        setCurrentStep(5);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [step4Checked, fileStatus?.loginPageNotEmpty]);
+
+  useEffect(() => {
+    if (step5Checked && fileStatus?.middlewareExists && fileStatus?.middlewareNotEmpty) {
+      const timer = setTimeout(() => {
+        onNext?.();
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [step5Checked, fileStatus?.middlewareExists, fileStatus?.middlewareNotEmpty, onNext]);
 
   return (
     <div ref={containerRef} className="h-screen flex flex-col p-2 overflow-y-auto gap-6">
@@ -520,6 +592,81 @@ export function Scene5BuildUI({ onBack, createFile, checkFileExists, checkFileNo
              {step4Checked && fileStatus?.loginPageNotEmpty && (
               <div className="p-3 bg-green-500/20 border border-green-500 rounded text-sm text-green-400">
                 ✓ Logic updated!
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Step 5: Protect pages with middleware */}
+      {currentStep === 5 && (
+        <section className="bg-(--vscode-editor-background) border border-(--vscode-input-border) rounded-xl p-2 space-y-4">
+          <div className="space-y-4">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-6 h-6 rounded-full bg-(--vscode-button-background) text-(--vscode-button-foreground) flex items-center justify-center font-bold">
+                5
+              </div>
+              <h4 className="flex-1 text-base font-semibold text-(--vscode-foreground)">
+                Protect routes with middleware
+              </h4>
+            </div>
+
+            <div className="space-y-3 text-(--vscode-descriptionForeground)">
+              <img
+                src={AUTH_PLACEHOLDER_IMAGE_URL}
+                alt="Auth protects pages"
+                className="w-full rounded-lg border border-(--vscode-input-border)"
+              />
+              <p className="text-sm">
+                Remember, auth should intercept requests before unauthenticated users reach protected pages. This middleware only lets the home page (`/`) and auth routes (`/auth/*`) pass through when no session exists—everything else gets redirected to `/login`.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-(--vscode-descriptionForeground)">
+                Edit <code>utils/supabase/middleware.ts</code> so it refreshes sessions and guards non-auth routes.
+              </p>
+
+              <button
+                onClick={() => openFile?.('utils/supabase/middleware.ts')}
+                className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium"
+              >
+                Open utils/supabase/middleware.ts
+              </button>
+
+              <div className="relative bg-(--vscode-input-background) border border-(--vscode-input-border) rounded-lg p-4 font-mono text-sm text-(--vscode-foreground)">
+                <button
+                  onClick={() => copyToClipboard(MIDDLEWARE_CODE)}
+                  className="absolute top-2 right-2 px-2 py-1 rounded border border-(--vscode-input-border) text-xs text-(--vscode-descriptionForeground) hover:bg-(--vscode-editor-background)"
+                >
+                  Copy
+                </button>
+                <pre className="whitespace-pre-wrap">{MIDDLEWARE_CODE}</pre>
+              </div>
+            </div>
+
+            <button
+              onClick={handleStep5Finished}
+              className="py-2 w-full rounded-lg bg-(--vscode-button-background) text-(--vscode-button-foreground) hover:opacity-90 transition-opacity font-medium"
+            >
+              I finished
+            </button>
+
+            {step5Checked && !fileStatus?.middlewareExists && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                Couldn't find the middleware file. Create it first via the previous step.
+              </div>
+            )}
+
+            {step5Checked && fileStatus?.middlewareExists && !fileStatus?.middlewareNotEmpty && (
+              <div className="p-3 bg-(--vscode-input-background) border border-red-500 rounded text-sm text-red-400">
+                File is still empty. Paste the middleware code and save.
+              </div>
+            )}
+
+            {step5Checked && fileStatus?.middlewareExists && fileStatus?.middlewareNotEmpty && (
+              <div className="p-3 bg-green-500/20 border border-green-500 rounded text-sm text-green-400">
+                ✓ Middleware locked down—your private routes are now protected!
               </div>
             )}
           </div>

@@ -6,6 +6,7 @@ import { Scene2Analyzing } from './components/Scene2Analyzing.jsx';
 import { Scene3ImplementAuth } from './components/Scene3ImplementAuth.jsx';
 import { Scene4Guide } from './components/Scene4Guide.jsx';
 import { Scene5BuildUI } from './components/Scene5BuildUI.jsx';
+import { Scene6Finish } from './components/Scene6Finish.jsx';
 import { useVSCodeMessaging } from './hooks/useVSCodeMessaging.js';
 
 function App() {
@@ -31,6 +32,10 @@ function App() {
 
 	function handleScene5() {
 		setCurrentScene(5);
+	}
+
+	function handleScene6() {
+		setCurrentScene(6);
 	}
 
 	return (
@@ -74,12 +79,16 @@ function App() {
 			{currentScene === 5 && (
 				<Scene5BuildUI 
 					onBack={() => setCurrentScene(4)} 
+					onNext={handleScene6}
 					createFile={createFile}
 					checkFileExists={checkFileExists}
 					checkFileNotEmpty={checkFileNotEmpty}
 					openFile={openFile}
 					fileStatus={fileStatus}
 				/>
+			)}
+			{currentScene === 6 && (
+				<Scene6Finish onRestart={() => setCurrentScene(2)} />
 			)}
 		</div>
 	);
